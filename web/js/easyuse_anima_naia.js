@@ -2,6 +2,8 @@ import { app } from "../../../scripts/app.js";
 import { ComfyWidgets } from "../../../scripts/widgets.js";
 
 const NODE_TYPE = "EasyUseAnimaNAIARandomPrompt";
+const PREVIEW_MIN_HEIGHT = 120;
+const PREVIEW_BOTTOM_PADDING = 16;
 const STORAGE_WIDGETS = [
   "cached_prompt",
   "cached_negative_prompt",
@@ -80,10 +82,37 @@ function setWidgetVisible(widget, visible) {
   }
 }
 
+function getPreviewFillHeight(node, widget) {
+  const nodeHeight = node.size?.[1] ?? 0;
+  const widgetY = Number.isFinite(widget.y) ? widget.y : 0;
+  if (!nodeHeight || !widgetY) {
+    return widget.__easyuseAnimaPreviewHeight ?? 220;
+  }
+  return Math.max(PREVIEW_MIN_HEIGHT, Math.floor(nodeHeight - widgetY - PREVIEW_BOTTOM_PADDING));
+}
+
+function applyPreviewFillHeight(node) {
+  const widget = findWidget(node, "easyuse_anima_preview");
+  if (!widget || widget.hidden) {
+    return;
+  }
+  const height = getPreviewFillHeight(node, widget);
+  if (widget.__easyuseAnimaPreviewHeight === height) {
+    return;
+  }
+  widget.__easyuseAnimaPreviewHeight = height;
+  if (widget.inputEl) {
+    widget.inputEl.style.minHeight = `${PREVIEW_MIN_HEIGHT}px`;
+    widget.inputEl.style.height = `${height}px`;
+  }
+}
+
 function refreshNodeSize(node) {
   requestAnimationFrame(() => {
+    applyPreviewFillHeight(node);
     const size = node.computeSize();
     node.onResize?.([Math.max(size[0], node.size[0]), Math.max(size[1], node.size[1])]);
+    applyPreviewFillHeight(node);
     app.graph.setDirtyCanvas(true, false);
   });
 }
@@ -166,12 +195,16 @@ function ensurePreviewWidget(node) {
     app,
   ).widget;
   widget.serialize = false;
+  widget.__easyuseAnimaPreviewHeight = 220;
+  widget.computeSize = function (width) {
+    return [width, this.__easyuseAnimaPreviewHeight ?? 220];
+  };
   widget.inputEl.readOnly = true;
   widget.inputEl.style.opacity = 0.7;
   widget.inputEl.style.fontSize = "0.75rem";
-  widget.inputEl.style.minHeight = "220px";
+  widget.inputEl.style.minHeight = `${PREVIEW_MIN_HEIGHT}px`;
   widget.inputEl.style.height = "220px";
-  widget.inputEl.style.resize = "vertical";
+  widget.inputEl.style.resize = "none";
   return widget;
 }
 
@@ -266,6 +299,20 @@ app.registerExtension({
     nodeType.prototype.onExecuted = function (message) {
       onExecuted?.apply(this, arguments);
       updatePreview(this, message);
+    };
+
+    const onResize = nodeType.prototype.onResize;
+    nodeType.prototype.onResize = function () {
+      const result = onResize?.apply(this, arguments);
+      applyPreviewFillHeight(this);
+      return result;
+    };
+
+    const onDrawForeground = nodeType.prototype.onDrawForeground;
+    nodeType.prototype.onDrawForeground = function () {
+      const result = onDrawForeground?.apply(this, arguments);
+      applyPreviewFillHeight(this);
+      return result;
     };
   },
 });
