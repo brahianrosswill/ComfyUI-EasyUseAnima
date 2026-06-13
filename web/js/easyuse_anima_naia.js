@@ -128,6 +128,9 @@ function ensurePreviewWidget(node) {
   widget.inputEl.readOnly = true;
   widget.inputEl.style.opacity = 0.7;
   widget.inputEl.style.fontSize = "0.75rem";
+  widget.inputEl.style.minHeight = "220px";
+  widget.inputEl.style.height = "220px";
+  widget.inputEl.style.resize = "vertical";
   return widget;
 }
 

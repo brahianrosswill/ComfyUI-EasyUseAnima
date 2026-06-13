@@ -220,7 +220,7 @@ class EasyUseAnimaNAIARandomPrompt:
                 "tooltip": "Internal signature for validating cached output.",
             }),
             "prompt": ("STRING", {
-                "multiline": True,
+                "multiline": False,
                 "default": "",
                 "placeholder": "prompt",
                 "tooltip": "Returned as-is when bypassed or when override_prompt is false.",
@@ -230,7 +230,7 @@ class EasyUseAnimaNAIARandomPrompt:
                 "tooltip": "true: use NAIA prompt. false: preserve input prompt.",
             }),
             "negative_prompt": ("STRING", {
-                "multiline": True,
+                "multiline": False,
                 "default": "",
                 "placeholder": "negative_prompt",
                 "tooltip": "Returned as-is when bypassed or when override_negative is false.",
