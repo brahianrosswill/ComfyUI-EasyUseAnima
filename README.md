@@ -52,3 +52,27 @@ pip install -r requirements.txt
 ```
 
 ComfyUI restart is required after installing or updating this node pack.
+
+## Installation
+
+Clone into `ComfyUI/custom_nodes`:
+
+```bash
+git clone https://github.com/n0va39/ComfyUI-EasyUseAnima
+```
+
+Then install dependencies in the ComfyUI Python environment:
+
+```bash
+pip install -r ComfyUI-EasyUseAnima/requirements.txt
+```
+
+Restart ComfyUI after installation.
+
+## ComfyUI Manager / Registry
+
+This repository includes `pyproject.toml` metadata for future Comfy Registry
+registration. The Registry node id is `easyuse-anima`.
+
+Before publishing to the Registry, verify that `[tool.comfy].PublisherId` matches
+the actual Comfy Registry publisher id.
