@@ -32,6 +32,7 @@ Main controls:
   this mode does not break ComfyUI caching.
 - `freeze_naia_output=true`: if cached output is valid, return it without
   calling NAIA. This keeps downstream cache stable for the same fixed output.
+- `show_preview=false`: hide the large read-only preview widget.
 - Saved-image workflow reproduction: after a fresh NAIA response, saved image
   metadata is written with `freeze_naia_output=true` and cached output values.
   Loading that workflow reproduces the same output without another NAIA call.

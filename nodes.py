@@ -196,6 +196,10 @@ class EasyUseAnimaNAIARandomPrompt:
                     "Saved-image workflows are written with this enabled."
                 ),
             }),
+            "show_preview": ("BOOLEAN", {
+                "default": True,
+                "tooltip": "Show the large read-only preview widget in the node UI.",
+            }),
             "cached_prompt": ("STRING", {
                 "multiline": True,
                 "default": "",

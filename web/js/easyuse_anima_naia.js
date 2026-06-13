@@ -113,6 +113,44 @@ function hookUseNaiaSettingsWidget(node) {
   widget.__easyuseAnimaHooked = true;
 }
 
+function shouldShowPreview(node) {
+  const widget = findWidget(node, "show_preview");
+  return !widget || widget.value !== false;
+}
+
+function setPreviewVisible(node, visible) {
+  const widget = findWidget(node, "easyuse_anima_preview");
+  if (!widget) {
+    return;
+  }
+  setWidgetVisible(widget, visible);
+  refreshNodeSize(node);
+}
+
+function updatePreviewVisibility(node) {
+  if (shouldShowPreview(node)) {
+    ensurePreviewWidget(node);
+    updatePreviewFromWidgets(node);
+    setPreviewVisible(node, true);
+  } else {
+    setPreviewVisible(node, false);
+  }
+}
+
+function hookShowPreviewWidget(node) {
+  const widget = findWidget(node, "show_preview");
+  if (!widget || widget.__easyuseAnimaHooked) {
+    return;
+  }
+  const callback = widget.callback;
+  widget.callback = function (value) {
+    const result = callback?.apply(this, arguments);
+    updatePreviewVisibility(node);
+    return result;
+  };
+  widget.__easyuseAnimaHooked = true;
+}
+
 function ensurePreviewWidget(node) {
   let widget = findWidget(node, "easyuse_anima_preview");
   if (widget) {
@@ -163,8 +201,11 @@ function updatePreview(node, message) {
     setWidgetValue(node, "cached_signature", signature);
   }
 
-  const preview = ensurePreviewWidget(node);
-  preview.value = previewText(status, width, height, prompt, negative);
+  if (shouldShowPreview(node)) {
+    const preview = ensurePreviewWidget(node);
+    preview.value = previewText(status, width, height, prompt, negative);
+    setPreviewVisible(node, true);
+  }
 
   refreshNodeSize(node);
 }
@@ -179,8 +220,11 @@ function updatePreviewFromWidgets(node) {
     return;
   }
 
-  const preview = ensurePreviewWidget(node);
-  preview.value = previewText("loaded", width, height, prompt, negative);
+  if (shouldShowPreview(node)) {
+    const preview = ensurePreviewWidget(node);
+    preview.value = previewText("loaded", width, height, prompt, negative);
+    setPreviewVisible(node, true);
+  }
 }
 
 app.registerExtension({
@@ -195,8 +239,12 @@ app.registerExtension({
       onNodeCreated?.apply(this, arguments);
       hideStorageWidgets(this);
       hookUseNaiaSettingsWidget(this);
+      hookShowPreviewWidget(this);
       updateNaiaSettingsVisibility(this);
-      ensurePreviewWidget(this);
+      if (shouldShowPreview(this)) {
+        ensurePreviewWidget(this);
+      }
+      updatePreviewVisibility(this);
       updatePreviewFromWidgets(this);
     };
 
@@ -205,7 +253,9 @@ app.registerExtension({
       onConfigure?.apply(this, arguments);
       hideStorageWidgets(this);
       hookUseNaiaSettingsWidget(this);
+      hookShowPreviewWidget(this);
       updateNaiaSettingsVisibility(this);
+      updatePreviewVisibility(this);
       updatePreviewFromWidgets(this);
     };
 
