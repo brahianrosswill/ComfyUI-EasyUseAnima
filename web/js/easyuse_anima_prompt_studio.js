@@ -31,10 +31,14 @@ const SECTION_STYLES = {
 
 const LEGEND_ITEMS = ["count", "character", "artist", "copyright", "general", "meta", "natural", "artist_unknown", "unknown"];
 const LEGEND_TOP_GAP = 14;
-const LEGEND_ROW_HEIGHT = 14;
+const LEGEND_ROW_HEIGHT = 18;
+const LEGEND_COLUMNS = 5;
 
 const WEIGHTED_TOKEN_RE = /^\((.*):[-+]?\d+(?:\.\d+)?\)$/s;
 const INLINE_SPACE_RE = /[ \t]+/g;
+const PROMPT_STUDIO_SETTINGS = {
+  typoIndicator: true,
+};
 
 function findWidget(node, name) {
   return node.widgets?.find((widget) => widget.name === name);
@@ -94,6 +98,56 @@ function debounce(fn, delay = 180) {
     clearTimeout(timer);
     timer = setTimeout(() => fn(...args), delay);
   };
+}
+
+function isHexColor(value) {
+  return /^#[0-9a-f]{6}$/i.test(String(value || ""));
+}
+
+function hexToRgba(value, alpha) {
+  if (!isHexColor(value)) {
+    return "transparent";
+  }
+  const red = Number.parseInt(value.slice(1, 3), 16);
+  const green = Number.parseInt(value.slice(3, 5), 16);
+  const blue = Number.parseInt(value.slice(5, 7), 16);
+  return `rgba(${red}, ${green}, ${blue}, ${alpha})`;
+}
+
+function parseColorSettings(value) {
+  try {
+    const parsed = JSON.parse(value || "{}");
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function applyPromptStudioSettings(settings) {
+  PROMPT_STUDIO_SETTINGS.typoIndicator = settings?.["prompt_studio.typo_indicator"] !== "false";
+  const colors = parseColorSettings(settings?.["prompt_studio.colors"]);
+  for (const [key, color] of Object.entries(colors)) {
+    if (!SECTION_STYLES[key] || !isHexColor(color)) {
+      continue;
+    }
+    SECTION_STYLES[key].color = color;
+    if (SECTION_STYLES[key].background && SECTION_STYLES[key].background !== "transparent") {
+      SECTION_STYLES[key].background = hexToRgba(color, 0.18);
+    }
+  }
+}
+
+async function loadPromptStudioSettings() {
+  try {
+    const response = await fetch("/easyuse_anima/settings");
+    if (!response.ok) {
+      return;
+    }
+    applyPromptStudioSettings(await response.json());
+    app.graph?.setDirtyCanvas(true, true);
+  } catch {
+    // Keep built-in defaults if the settings endpoint is not available yet.
+  }
 }
 
 async function classifyPrompt(text) {
@@ -187,7 +241,7 @@ function tokenStyle(token) {
   if (style.background && style.background !== "transparent") {
     rules.push(`background: ${style.background}`, "border-radius: 3px");
   }
-  if (style.underline && !token?.weighted) {
+  if (style.underline && PROMPT_STUDIO_SETTINGS.typoIndicator && !token?.weighted) {
     rules.push(
       "text-decoration-line: underline",
       "text-decoration-style: wavy",
@@ -400,7 +454,7 @@ function ensureHighlightOverlay(input) {
 }
 
 function desiredLegendHeight() {
-  return LEGEND_TOP_GAP + 18 + LEGEND_ITEMS.length * LEGEND_ROW_HEIGHT;
+  return LEGEND_TOP_GAP + 16 + 2 * LEGEND_ROW_HEIGHT;
 }
 
 function drawLegend(ctx, node, widget, width, y) {
@@ -415,17 +469,21 @@ function drawLegend(ctx, node, widget, width, y) {
   ctx.fillStyle = "#94a3b8";
   ctx.fillText("Color legend", 14, y + LEGEND_TOP_GAP + 12);
 
-  const labelX = 28;
-  let rowY = y + LEGEND_TOP_GAP + 27;
+  const left = 14;
+  const availableWidth = Math.max(160, width - 28);
+  const columnWidth = availableWidth / LEGEND_COLUMNS;
   ctx.font = "9px sans-serif";
-  for (const key of LEGEND_ITEMS) {
+  for (const [index, key] of LEGEND_ITEMS.entries()) {
     const style = SECTION_STYLES[key];
     const label = style.label;
+    const column = index % LEGEND_COLUMNS;
+    const row = Math.floor(index / LEGEND_COLUMNS);
+    const x = left + column * columnWidth;
+    const rowY = y + LEGEND_TOP_GAP + 29 + row * LEGEND_ROW_HEIGHT;
     ctx.fillStyle = style.background;
-    ctx.fillRect(14, rowY - 8, 10, 10);
+    ctx.fillRect(x, rowY - 8, 10, 10);
     ctx.fillStyle = style.color;
-    ctx.fillText(label, labelX, rowY);
-    rowY += LEGEND_ROW_HEIGHT;
+    ctx.fillText(label, x + 14, rowY);
   }
   ctx.restore();
 }
@@ -614,6 +672,9 @@ function applyExecutedInputs(node, message) {
 
 app.registerExtension({
   name: "easyuse-anima.prompt-studio",
+  async setup() {
+    await loadPromptStudioSettings();
+  },
   async beforeRegisterNodeDef(nodeType, nodeData) {
     if (nodeData.name !== NODE_TYPE) {
       return;

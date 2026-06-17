@@ -16,6 +16,8 @@ DEFAULT_SETTINGS = {
     "animadex.site": "https://animadex.net",
     "prompt.metadata_filter_words": "",
     "autocomplete.source": "kr_modified",
+    "prompt_studio.typo_indicator": "true",
+    "prompt_studio.colors": "",
 }
 
 
@@ -57,6 +59,14 @@ def public_settings() -> dict:
         "autocomplete.source": settings.get(
             "autocomplete.source",
             DEFAULT_SETTINGS["autocomplete.source"],
+        ),
+        "prompt_studio.typo_indicator": settings.get(
+            "prompt_studio.typo_indicator",
+            DEFAULT_SETTINGS["prompt_studio.typo_indicator"],
+        ),
+        "prompt_studio.colors": settings.get(
+            "prompt_studio.colors",
+            DEFAULT_SETTINGS["prompt_studio.colors"],
         ),
     }
 

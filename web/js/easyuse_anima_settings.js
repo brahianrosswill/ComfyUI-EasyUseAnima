@@ -91,6 +91,18 @@ async function runDownload(forceRefresh = false, button = null) {
 const statusPanels = new Set();
 const autocompletePanels = new Set();
 
+const PROMPT_STUDIO_COLOR_DEFAULTS = {
+  count: { label: "인원수", color: "#60a5fa" },
+  character: { label: "캐릭터", color: "#f472b6" },
+  artist: { label: "작가", color: "#a78bfa" },
+  copyright: { label: "작품", color: "#fb923c" },
+  general: { label: "학습 태그", color: "#4ade80" },
+  meta: { label: "메타", color: "#94a3b8" },
+  natural: { label: "자연어", color: "#cbd5e1" },
+  artist_unknown: { label: "미등록 작가", color: "#f87171" },
+  unknown: { label: "미확인", color: "#cbd5e1" },
+};
+
 function sectionHeader(title, description) {
   const container = document.createElement("div");
   container.style.cssText =
@@ -159,6 +171,102 @@ function metadataFilterEditor(initialValue = "") {
   controls.append(saveButton, status);
   container.append(controls);
 
+  return container;
+}
+
+function parseColorSettings(value = "") {
+  try {
+    const parsed = JSON.parse(value || "{}");
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function promptStudioEditor(settings = {}) {
+  const container = document.createElement("div");
+  container.style.cssText = "max-width: 760px; line-height: 1.45;";
+
+  const guide = document.createElement("div");
+  guide.textContent =
+    "Controls Prompt Studio tag highlighting. Colors apply to both highlighted prompt text and the color legend.";
+  guide.style.cssText = "margin-bottom: 8px; opacity: 0.78;";
+  container.append(guide);
+
+  const typoRow = document.createElement("label");
+  typoRow.style.cssText = "display: flex; align-items: center; gap: 7px; margin-bottom: 10px;";
+  const typoToggle = document.createElement("input");
+  typoToggle.type = "checkbox";
+  typoToggle.checked = settings["prompt_studio.typo_indicator"] !== "false";
+  const typoText = document.createElement("span");
+  typoText.textContent = "Show typo indicators for unregistered artist / unknown tags";
+  typoRow.append(typoToggle, typoText);
+  container.append(typoRow);
+
+  const colors = parseColorSettings(settings["prompt_studio.colors"]);
+  const grid = document.createElement("div");
+  grid.style.cssText =
+    "display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 6px 12px; max-width: 560px;";
+  const colorInputs = new Map();
+  for (const [key, item] of Object.entries(PROMPT_STUDIO_COLOR_DEFAULTS)) {
+    const label = document.createElement("label");
+    label.style.cssText = "display: flex; align-items: center; gap: 7px; font-size: 0.92em;";
+    const input = document.createElement("input");
+    input.type = "color";
+    input.value = colors[key] || item.color;
+    input.style.cssText = "width: 34px; height: 24px; padding: 0;";
+    const text = document.createElement("span");
+    text.textContent = item.label;
+    label.append(input, text);
+    grid.append(label);
+    colorInputs.set(key, input);
+  }
+  container.append(grid);
+
+  const controls = document.createElement("div");
+  controls.style.cssText = "display: flex; align-items: center; gap: 8px; margin-top: 9px; flex-wrap: wrap;";
+
+  const saveButton = document.createElement("button");
+  saveButton.textContent = "Save Prompt Studio";
+  saveButton.style.cssText = "padding: 5px 10px; cursor: pointer;";
+
+  const resetButton = document.createElement("button");
+  resetButton.textContent = "Reset Colors";
+  resetButton.style.cssText = "padding: 5px 10px; cursor: pointer;";
+
+  const status = document.createElement("span");
+  status.style.cssText = "opacity: 0.76;";
+
+  resetButton.onclick = () => {
+    for (const [key, input] of colorInputs.entries()) {
+      input.value = PROMPT_STUDIO_COLOR_DEFAULTS[key].color;
+    }
+  };
+
+  saveButton.onclick = async () => {
+    const originalText = saveButton.textContent;
+    const colorSettings = {};
+    for (const [key, input] of colorInputs.entries()) {
+      colorSettings[key] = input.value;
+    }
+    try {
+      saveButton.disabled = true;
+      saveButton.textContent = "Saving...";
+      await saveSetting("prompt_studio.typo_indicator", typoToggle.checked ? "true" : "false");
+      await saveSetting("prompt_studio.colors", JSON.stringify(colorSettings));
+      status.textContent = "Saved. Reload ComfyUI page to apply.";
+      status.style.color = "#16a34a";
+    } catch (error) {
+      status.textContent = `Save failed: ${error.message || error}`;
+      status.style.color = "#dc2626";
+    } finally {
+      saveButton.disabled = false;
+      saveButton.textContent = originalText;
+    }
+  };
+
+  controls.append(saveButton, resetButton, status);
+  container.append(controls);
   return container;
 }
 
@@ -432,6 +540,13 @@ app.registerExtension({
       name: "EasyUse Anima: Autocomplete CSV",
       type: () => autocompleteDatasetSelector(settings["autocomplete.source"] || ""),
       tooltip: "Select which bundled Korean Danbooru CSV powers autocomplete and tag highlighting.",
+    });
+
+    app.ui.settings.addSetting({
+      id: "EasyUseAnima.Prompt.PromptStudio",
+      name: "EasyUse Anima: Prompt Studio Highlighting",
+      type: () => promptStudioEditor(settings),
+      tooltip: "Configure Prompt Studio typo indicators and tag highlight colors.",
     });
 
     app.ui.settings.addSetting({

@@ -281,6 +281,8 @@ class AnimaDexDatasetDownloadTests(unittest.TestCase):
         self.assertNotIn("animadex.token_file", public_settings())
         self.assertIn("prompt.metadata_filter_words", public_settings())
         self.assertIn("autocomplete.source", public_settings())
+        self.assertIn("prompt_studio.typo_indicator", public_settings())
+        self.assertIn("prompt_studio.colors", public_settings())
 
     def test_cached_dataset_does_not_require_token(self):
         with tempfile.TemporaryDirectory() as tmp:
