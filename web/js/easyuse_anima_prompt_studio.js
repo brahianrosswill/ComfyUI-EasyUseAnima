@@ -44,6 +44,14 @@ function findWidget(node, name) {
   return node.widgets?.find((widget) => widget.name === name);
 }
 
+function findInputEl(widget) {
+  const input = widget?.inputEl;
+  if (input instanceof HTMLTextAreaElement || input instanceof HTMLInputElement) {
+    return input;
+  }
+  return null;
+}
+
 function firstValue(value, fallback = null) {
   if (Array.isArray(value)) {
     return value.length ? value[0] : fallback;
@@ -519,8 +527,8 @@ function displayText(node, widget) {
 }
 
 function updateHighlight(node, widget, tokens = widget.__easyuseAnimaTokens || []) {
-  const input = widget?.inputEl;
-  if (!(input instanceof HTMLTextAreaElement || input instanceof HTMLInputElement)) {
+  const input = findInputEl(widget);
+  if (!input) {
     return;
   }
   const overlay = ensureHighlightOverlay(input);
@@ -536,8 +544,8 @@ function updateHighlight(node, widget, tokens = widget.__easyuseAnimaTokens || [
 }
 
 function enhanceResizableInput(node, widget) {
-  const input = widget?.inputEl;
-  if (!(input instanceof HTMLTextAreaElement || input instanceof HTMLInputElement)) {
+  const input = findInputEl(widget);
+  if (!input) {
     return;
   }
 
@@ -584,8 +592,49 @@ function enhanceResizableInput(node, widget) {
   input.__easyuseAnimaStudioResizable = true;
 }
 
-function hookStudioNode(node) {
+function syncWidgetValue(widget) {
+  const input = findInputEl(widget);
+  if (!input) {
+    return;
+  }
+  widget.value = input.value;
+}
+
+function syncStudioValues(node, serialized = null) {
+  for (const name of FIELD_NAMES) {
+    const widget = findWidget(node, name);
+    if (widget) {
+      syncWidgetValue(widget);
+    }
+  }
+
+  if (!serialized || !Array.isArray(node.widgets) || !Array.isArray(serialized.widgets_values)) {
+    return;
+  }
+
+  for (const name of FIELD_NAMES) {
+    const widgetIndex = node.widgets.findIndex((widget) => widget?.name === name);
+    const widget = widgetIndex >= 0 ? node.widgets[widgetIndex] : null;
+    if (widgetIndex >= 0 && widget) {
+      serialized.widgets_values[widgetIndex] = widget.value ?? "";
+    }
+  }
+}
+
+function restoreInputFromWidget(widget) {
+  const input = findInputEl(widget);
+  if (!input) {
+    return;
+  }
+  const value = String(widget?.value ?? input.value ?? "");
+  if (input.value !== value) {
+    input.value = value;
+  }
+}
+
+function hookStudioNode(node, attempt = 0) {
   const updateByField = new Map();
+  let pendingInput = false;
 
   const getUpdateField = (fieldName) => {
     if (updateByField.has(fieldName)) {
@@ -626,6 +675,12 @@ function hookStudioNode(node) {
     if (!widget) {
       continue;
     }
+    const input = findInputEl(widget);
+    if (!input) {
+      pendingInput = true;
+      continue;
+    }
+    restoreInputFromWidget(widget);
     enhanceResizableInput(node, widget);
     const updateField = getUpdateField(name);
 
@@ -638,14 +693,21 @@ function hookStudioNode(node) {
         updateField();
         return result;
       };
-      widget.inputEl?.addEventListener("input", () => {
-        widget.value = widget.inputEl.value;
+      input.addEventListener("input", () => {
+        widget.value = input.value;
         widget.__easyuseAnimaExecutedText = null;
         updateHighlight(node, widget);
         updateField();
       });
-      widget.inputEl?.addEventListener("click", () => updateHighlight(node, widget));
-      widget.inputEl?.addEventListener("keyup", () => updateHighlight(node, widget));
+      input.addEventListener("change", () => {
+        widget.value = input.value;
+        widget.__easyuseAnimaExecutedText = null;
+        updateHighlight(node, widget);
+        updateField();
+      });
+      input.addEventListener("blur", () => syncWidgetValue(widget));
+      input.addEventListener("click", () => updateHighlight(node, widget));
+      input.addEventListener("keyup", () => updateHighlight(node, widget));
       widget.__easyuseAnimaStudioHooked = true;
     }
     updateField();
@@ -653,6 +715,9 @@ function hookStudioNode(node) {
 
   ensureLegendWidget(node);
   refreshNodeSize(node);
+  if (pendingInput && attempt < 12) {
+    setTimeout(() => hookStudioNode(node, attempt + 1), 80);
+  }
 }
 
 function applyExecutedInputs(node, message) {
@@ -697,12 +762,19 @@ app.registerExtension({
       const result = onResize?.apply(this, arguments);
       for (const name of FIELD_NAMES) {
         const widget = findWidget(this, name);
-        const input = widget?.inputEl;
+        const input = findInputEl(widget);
         if (input && widget.__easyuseAnimaHeight) {
           input.style.height = `${widget.__easyuseAnimaHeight}px`;
           updateHighlight(this, widget);
         }
       }
+      return result;
+    };
+
+    const onSerialize = nodeType.prototype.onSerialize;
+    nodeType.prototype.onSerialize = function (serialized) {
+      const result = onSerialize?.apply(this, arguments);
+      syncStudioValues(this, serialized);
       return result;
     };
 
