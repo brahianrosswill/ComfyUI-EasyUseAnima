@@ -8,7 +8,7 @@ except ImportError:
     web = None
 
 from .settings import public_settings, save_setting
-from .animadex_dataset import dataset_paths, download_animadex_dataset
+from .animadex_dataset import dataset_paths, dataset_status, download_animadex_dataset
 
 
 if server is not None and web is not None:
@@ -58,3 +58,7 @@ if server is not None and web is not None:
                 {"status": "error", "message": str(exc), **dataset_paths()},
                 status=500,
             )
+
+    @server.PromptServer.instance.routes.get("/easyuse_anima/animadex_status")
+    async def animadex_status_handler(request):
+        return web.json_response(dataset_status())

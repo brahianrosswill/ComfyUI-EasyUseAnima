@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import os
-from pathlib import Path
 
 try:
     from .anima_prompt.knowledge import PACKAGE_DATA_DIR
@@ -13,7 +12,6 @@ SETTINGS_FILE = PACKAGE_DATA_DIR / "settings.json"
 
 DEFAULT_SETTINGS = {
     "animadex.token": "",
-    "animadex.token_file": "",
     "animadex.site": "https://animadex.net",
 }
 
@@ -50,7 +48,6 @@ def public_settings() -> dict:
     settings = get_settings()
     return {
         "animadex.token_configured": bool(settings.get("animadex.token")),
-        "animadex.token_file": settings.get("animadex.token_file", ""),
         "animadex.site": settings.get("animadex.site", DEFAULT_SETTINGS["animadex.site"]),
     }
 
@@ -60,12 +57,6 @@ def resolve_animadex_token() -> str:
     token = settings.get("animadex.token", "").strip()
     if token:
         return token
-    token_file = settings.get("animadex.token_file", "").strip()
-    if token_file:
-        path = Path(token_file)
-        if not path.is_file():
-            raise RuntimeError(f"[EasyUse Anima] token_file does not exist: {path}")
-        return path.read_text(encoding="utf-8").strip()
     return os.environ.get("ANIMADEX_IMPORT_TOKEN", "").strip()
 
 

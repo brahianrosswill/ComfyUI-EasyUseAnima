@@ -20,6 +20,15 @@ function setSetting(key, value) {
   });
 }
 
+async function getDatasetStatus() {
+  const response = await fetch("/easyuse_anima/animadex_status");
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.message || `HTTP ${response.status}`);
+  }
+  return data;
+}
+
 async function downloadAnimaDexDataset(forceRefresh = false) {
   const response = await fetch("/easyuse_anima/download_animadex", {
     method: "POST",
@@ -49,14 +58,82 @@ async function runDownload(forceRefresh = false, button = null) {
         `Artist index: ${result.artist_index || ""}`,
       ].join("\n"),
     );
+    await refreshStatusPanels();
   } catch (error) {
     alert(`AnimaDex dataset download failed:\n${error.message || error}`);
+    await refreshStatusPanels();
   } finally {
     if (button) {
       button.disabled = false;
       button.textContent = originalText;
     }
   }
+}
+
+const statusPanels = new Set();
+
+function formatFileStatus(fileStatus) {
+  if (!fileStatus?.exists) {
+    return `missing: ${fileStatus?.path || ""}`;
+  }
+  const size = Number(fileStatus.size || 0).toLocaleString();
+  const mtime = fileStatus.mtime
+    ? new Date(fileStatus.mtime * 1000).toLocaleString()
+    : "unknown time";
+  return `found (${size} bytes, ${mtime}): ${fileStatus.path}`;
+}
+
+function appendLine(container, label, value) {
+  const row = document.createElement("div");
+  const strong = document.createElement("strong");
+  strong.textContent = `${label}: `;
+  row.append(strong, document.createTextNode(value));
+  container.append(row);
+}
+
+function renderStatusPanel(panel, status) {
+  panel.replaceChildren();
+
+  const guide = document.createElement("div");
+  guide.style.cssText = "margin-bottom: 8px; line-height: 1.45;";
+  guide.textContent =
+    "Paste the AnimaDex export token above, then click Download. Dataset files are saved inside this custom node under __animadex__ and are ignored by git.";
+  panel.append(guide);
+
+  const statusText = status.downloaded ? "Downloaded" : "Not downloaded";
+  appendLine(panel, "Dataset", statusText);
+  appendLine(panel, "Token", status.token_configured ? "configured" : "not configured");
+  appendLine(panel, "Storage", status.data_dir || "");
+  appendLine(panel, "Character index", formatFileStatus(status.character_index));
+  appendLine(panel, "Artist index", formatFileStatus(status.artist_index));
+
+  const refresh = document.createElement("button");
+  refresh.textContent = "Refresh Status";
+  refresh.style.cssText = "margin-top: 8px; padding: 4px 10px; cursor: pointer;";
+  refresh.onclick = () => refreshStatusPanel(panel);
+  panel.append(refresh);
+}
+
+async function refreshStatusPanel(panel) {
+  try {
+    const status = await getDatasetStatus();
+    renderStatusPanel(panel, status);
+  } catch (error) {
+    panel.textContent = `Could not read AnimaDex dataset status: ${error.message || error}`;
+  }
+}
+
+async function refreshStatusPanels() {
+  await Promise.all([...statusPanels].map((panel) => refreshStatusPanel(panel)));
+}
+
+function datasetStatusPanel() {
+  const panel = document.createElement("div");
+  panel.style.cssText = "max-width: 760px; line-height: 1.45; white-space: normal;";
+  panel.textContent = "Checking AnimaDex dataset status...";
+  statusPanels.add(panel);
+  refreshStatusPanel(panel);
+  return panel;
 }
 
 function downloadButton(label, forceRefresh = false) {
@@ -80,15 +157,16 @@ app.registerExtension({
         : "EasyUse Anima: AnimaDex Export Token",
       type: "text",
       defaultValue: "",
-      onChange: (value) => setSetting("animadex.token", value),
+      onChange: async (value) => {
+        await setSetting("animadex.token", value);
+        await refreshStatusPanels();
+      },
     });
 
     app.ui.settings.addSetting({
-      id: "EasyUseAnima.AnimaDex.TokenFile",
-      name: "EasyUse Anima: AnimaDex Token File",
-      type: "text",
-      defaultValue: settings["animadex.token_file"] || "",
-      onChange: (value) => setSetting("animadex.token_file", value),
+      id: "EasyUseAnima.AnimaDex.Status",
+      name: "EasyUse Anima: AnimaDex Dataset Status",
+      type: () => datasetStatusPanel(),
     });
 
     app.ui.settings.addSetting({

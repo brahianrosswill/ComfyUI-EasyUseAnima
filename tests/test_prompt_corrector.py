@@ -7,6 +7,8 @@ from pathlib import Path
 from unittest.mock import patch
 
 from nodes import EasyUseAnimaAnimaDexDatasetDownload, EasyUseAnimaPromptCorrector
+from animadex_dataset import dataset_status
+from settings import public_settings
 
 
 class PromptCorrectorTests(unittest.TestCase):
@@ -89,6 +91,26 @@ class PromptCorrectorTests(unittest.TestCase):
 
 
 class AnimaDexDatasetDownloadTests(unittest.TestCase):
+    def test_dataset_status_reports_downloaded_indexes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            index = root / "index"
+            index.mkdir(parents=True)
+            character_index = index / "character_index.jsonl"
+            artist_index = index / "artist_index.jsonl"
+            character_index.write_text("", encoding="utf-8")
+            artist_index.write_text("", encoding="utf-8")
+
+            with patch("animadex_dataset.PACKAGE_DATA_DIR", root):
+                status = dataset_status()
+
+        self.assertTrue(status["downloaded"])
+        self.assertTrue(status["character_index"]["exists"])
+        self.assertTrue(status["artist_index"]["exists"])
+
+    def test_public_settings_does_not_expose_token_file(self):
+        self.assertNotIn("animadex.token_file", public_settings())
+
     def test_cached_dataset_does_not_require_token(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

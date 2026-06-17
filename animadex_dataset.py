@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 try:
     from .anima_prompt import AnimaDexDB, AnimaDexImportClient
@@ -20,6 +21,47 @@ def dataset_paths() -> dict[str, str]:
         "artists_csv": str(data_dir / "import" / "artists.csv"),
         "character_index": str(data_dir / "index" / "character_index.jsonl"),
         "artist_index": str(data_dir / "index" / "artist_index.jsonl"),
+    }
+
+
+def _file_status(path: Path) -> dict[str, object]:
+    if not path.is_file():
+        return {
+            "path": str(path),
+            "exists": False,
+            "size": 0,
+            "mtime": 0,
+        }
+    stat = path.stat()
+    return {
+        "path": str(path),
+        "exists": True,
+        "size": stat.st_size,
+        "mtime": stat.st_mtime,
+    }
+
+
+def dataset_status() -> dict[str, object]:
+    data_dir = PACKAGE_DATA_DIR
+    characters_csv = data_dir / "import" / "characters.csv"
+    artists_csv = data_dir / "import" / "artists.csv"
+    character_index = data_dir / "index" / "character_index.jsonl"
+    artist_index = data_dir / "index" / "artist_index.jsonl"
+    character_index_status = _file_status(character_index)
+    artist_index_status = _file_status(artist_index)
+    downloaded = bool(
+        character_index_status["exists"]
+        and artist_index_status["exists"]
+    )
+    token_configured = bool(resolve_animadex_token())
+    return {
+        "downloaded": downloaded,
+        "token_configured": token_configured,
+        "data_dir": str(data_dir),
+        "characters_csv": _file_status(characters_csv),
+        "artists_csv": _file_status(artists_csv),
+        "character_index": character_index_status,
+        "artist_index": artist_index_status,
     }
 
 
@@ -51,7 +93,7 @@ def download_animadex_dataset(
     if not token_value:
         raise RuntimeError(
             "[EasyUse Anima] AnimaDex export token is required for first dataset download. "
-            "Set it in ComfyUI Settings, token_file, or ANIMADEX_IMPORT_TOKEN."
+            "Set it in ComfyUI Settings or ANIMADEX_IMPORT_TOKEN."
         )
 
     import_dir.mkdir(parents=True, exist_ok=True)

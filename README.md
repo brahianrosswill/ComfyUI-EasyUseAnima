@@ -112,6 +112,8 @@ The same download can also be started from ComfyUI Settings:
 
 - `EasyUse Anima: AnimaDex Export Token`: stores the export token in this custom
   node's local settings file.
+- `EasyUse Anima: AnimaDex Dataset Status`: shows whether the local indexes are
+  present, where they are stored, and whether a token is configured.
 - `EasyUse Anima: Download AnimaDex Dataset`: downloads only when local indexes
   are missing.
 - `EasyUse Anima: Force Refresh AnimaDex Dataset`: downloads again and rebuilds
@@ -132,12 +134,11 @@ does not download again. Set `force_refresh=true` to download again.
 Token options:
 
 - ComfyUI Settings -> `EasyUse Anima: AnimaDex Export Token`
-- ComfyUI Settings -> `EasyUse Anima: AnimaDex Token File`
 - `ANIMADEX_IMPORT_TOKEN`: environment variable used when no settings token or
-  token file is configured.
+  token is configured.
 
 Avoid putting a real token directly into workflows. The download node reads the
-token from the ComfyUI settings/API storage, a token file, or the environment.
+token from the ComfyUI settings/API storage or the environment.
 The settings token is stored under `__animadex__/settings.json`, which is ignored
 by git with the downloaded dataset files.
 
