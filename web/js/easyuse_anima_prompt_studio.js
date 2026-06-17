@@ -354,13 +354,13 @@ function drawLegend(ctx, node, widget, width, y) {
   }
   const height = widget.__height || LEGEND_HEIGHT;
   ctx.save();
-  ctx.fillStyle = "rgba(15, 23, 42, 0.58)";
+  ctx.fillStyle = "rgba(51, 51, 51, 0.82)";
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.55)";
+  ctx.lineWidth = 1;
   ctx.beginPath();
-  ctx.roundRect?.(8, y + 5, width - 16, height - 10, 7);
-  if (!ctx.roundRect) {
-    ctx.rect(8, y + 5, width - 16, height - 10);
-  }
+  ctx.rect(8, y + 5, width - 16, height - 10);
   ctx.fill();
+  ctx.stroke();
 
   ctx.font = "9px sans-serif";
   ctx.fillStyle = "#94a3b8";
