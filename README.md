@@ -78,10 +78,12 @@ Autocomplete:
 
 - Prompt Builder and Prompt Corrector text fields use the bundled Korean
   Danbooru CSV under `__easyuse_anima__`.
+- Generic multiline `STRING` prompt/text nodes, including primitive multiline
+  string nodes, can also use the same autocomplete.
 - Type English tags or Korean words from the description/keywords, then use
   arrow keys and Enter/Tab to insert a suggestion.
-- Autocomplete is scoped to EasyUse Anima nodes and is not attached to LoRA
-  Manager / Lora Stacker nodes.
+- Nodes or inputs that already expose LoRA/autocomplete-specific widgets, such
+  as LoRA Manager / Lora Stacker nodes, are excluded.
 
 The bundled Korean Danbooru CSV is included with permission from its author.
 

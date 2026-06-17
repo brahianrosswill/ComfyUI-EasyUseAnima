@@ -19,6 +19,24 @@ const EXCLUDED_NODE_PATTERNS = [
   /lora\s*stacker/i,
   /loramanager/i,
   /lora[_\s-]*manager/i,
+  /lora manager/i,
+];
+
+const EXCLUDED_INPUT_TYPE_PATTERNS = [
+  /autocomplete/i,
+  /lora/i,
+  /embedding/i,
+  /checkpoint/i,
+  /model/i,
+];
+
+const GENERIC_NODE_PATTERNS = [
+  /primitive.*string/i,
+  /string.*primitive/i,
+  /string.*multiline/i,
+  /multiline.*string/i,
+  /text/i,
+  /prompt/i,
 ];
 
 const MAX_RESULTS = 20;
@@ -100,12 +118,88 @@ function hidePopup() {
   activeState = null;
 }
 
+function inputTypeName(inputSpec) {
+  if (Array.isArray(inputSpec)) {
+    return String(inputSpec[0] || "");
+  }
+  return String(inputSpec || "");
+}
+
+function inputOptions(inputSpec) {
+  if (Array.isArray(inputSpec) && typeof inputSpec[1] === "object" && inputSpec[1] !== null) {
+    return inputSpec[1];
+  }
+  return {};
+}
+
+function allInputSpecs(nodeData) {
+  const inputs = nodeData?.input || {};
+  const specs = [];
+  for (const group of ["required", "optional"]) {
+    const values = inputs[group] || {};
+    for (const [name, spec] of Object.entries(values)) {
+      specs.push([name, spec]);
+    }
+  }
+  return specs;
+}
+
+function isExcludedInput(inputSpec) {
+  const type = inputTypeName(inputSpec);
+  const options = inputOptions(inputSpec);
+  const values = [
+    type,
+    options.widgetType,
+    options.placeholder,
+    options.tooltip,
+  ].filter(Boolean).map((value) => String(value));
+  return values.some((value) => EXCLUDED_INPUT_TYPE_PATTERNS.some((pattern) => pattern.test(value)));
+}
+
+function isGenericStringNode(nodeData) {
+  const values = [nodeData?.name, nodeData?.display_name, nodeData?.category]
+    .filter(Boolean)
+    .map((value) => String(value));
+  return values.some((value) => GENERIC_NODE_PATTERNS.some((pattern) => pattern.test(value)));
+}
+
+function isPromptLikeWidgetName(name) {
+  return /prompt|tag|text|string|caption|positive|negative/i.test(String(name || ""));
+}
+
+function isTargetStringInput(nodeData, name, inputSpec) {
+  const type = inputTypeName(inputSpec);
+  const options = inputOptions(inputSpec);
+  if (!type.split(",").map((item) => item.trim()).includes("STRING")) {
+    return false;
+  }
+  if (isExcludedInput(inputSpec)) {
+    return false;
+  }
+  if (options.multiline === true) {
+    return isGenericStringNode(nodeData) || isPromptLikeWidgetName(name);
+  }
+  return isGenericStringNode(nodeData) && isPromptLikeWidgetName(name);
+}
+
 function targetWidgets(nodeData) {
-  return TARGETS[nodeData.name] || null;
+  if (TARGETS[nodeData.name]) {
+    return TARGETS[nodeData.name];
+  }
+  if (shouldSkipNode(null, nodeData)) {
+    return null;
+  }
+  const names = new Set();
+  for (const [name, spec] of allInputSpecs(nodeData)) {
+    if (isTargetStringInput(nodeData, name, spec)) {
+      names.add(name);
+    }
+  }
+  return names.size ? names : null;
 }
 
 function shouldSkipNode(node, nodeData) {
-  const values = [nodeData?.name, node?.type, node?.title]
+  const values = [nodeData?.name, nodeData?.display_name, nodeData?.category, node?.type, node?.title]
     .filter(Boolean)
     .map((value) => String(value));
   return values.some((value) => EXCLUDED_NODE_PATTERNS.some((pattern) => pattern.test(value)));
