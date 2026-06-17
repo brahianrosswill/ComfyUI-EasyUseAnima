@@ -35,7 +35,8 @@ _COUNT_RE = re.compile(
     r"female|females|male|males|child|children)s?$",
     re.IGNORECASE,
 )
-_WEIGHTED_TOKEN_RE = re.compile(r"^\(([^(),]+):[-+]?\d+(?:\.\d+)?\)$")
+_WEIGHTED_TOKEN_RE = re.compile(r"^\((.*):[-+]?\d+(?:\.\d+)?\)$")
+_DESCRIPTION_PREFIX_RE = re.compile(r"^\[([^\]]+)\]")
 
 
 @dataclass(frozen=True)
@@ -61,6 +62,24 @@ def _display_description(value: str, max_length: int = 160) -> str:
     return value[: max_length - 1].rstrip() + "..."
 
 
+def _category_from_description(category: str, description: str) -> str:
+    if category != "general":
+        return category
+    match = _DESCRIPTION_PREFIX_RE.match(description)
+    if not match:
+        return category
+    prefix = match.group(1)
+    if "캐릭터" in prefix:
+        return "character"
+    if "저작권" in prefix or "작품" in prefix or "시리즈" in prefix:
+        return "copyright"
+    if "작가" in prefix or "아티스트" in prefix:
+        return "artist"
+    if "메타" in prefix:
+        return "meta"
+    return category
+
+
 def _safe_count(value: str) -> int:
     try:
         return int(value)
@@ -84,6 +103,7 @@ def _load_entries(path: Path = AUTOCOMPLETE_CSV) -> list[AutocompleteEntry]:
             category = _CATEGORY_NAMES.get(row[1].strip(), row[1].strip())
             count = _safe_count(row[2])
             description = _display_description(row[3])
+            category = _category_from_description(category, description)
             search = _normalize(" ".join((tag, description)))
             entries.append(
                 AutocompleteEntry(
@@ -126,7 +146,7 @@ def _token_base(token: str) -> str:
     token = str(token or "").strip()
     weighted = _WEIGHTED_TOKEN_RE.match(token)
     if weighted:
-        return weighted.group(1).strip()
+        return weighted.group(1).strip(" ,\n\t")
     if token.startswith("@"):
         return token[1:].strip()
     return token

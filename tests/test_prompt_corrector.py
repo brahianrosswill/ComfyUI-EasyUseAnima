@@ -341,19 +341,29 @@ class AutocompleteDatasetTests(unittest.TestCase):
                         '1girl,0,100,"[인물] 여성 캐릭터 한 명"',
                         'hatsune miku,4,90,"[캐릭터] 하츠네 미쿠"',
                         'long hair,0,80,"[헤어] 장발"',
+                        'series name,0,70,"[저작권 > 게임] 작품명"',
                     ]
                 )
                 + "\n",
                 encoding="utf-8",
             )
 
-            result = classify_prompt_text("1girl, hatsune miku, unknown tag", path=path)
+            result = classify_prompt_text(
+                (
+                    "1girl, (hatsune miku:0.7), series name, "
+                    "(A highly aesthetic Pixiv style illustration, clean composition.:0.6), "
+                    "unknown tag"
+                ),
+                path=path,
+            )
 
         sections = [token["section"] for token in result["tokens"]]
-        self.assertEqual(sections, ["count", "character", "unknown"])
+        self.assertEqual(sections, ["count", "character", "copyright", "natural", "unknown"])
         self.assertTrue(result["tokens"][0]["learned"])
         self.assertTrue(result["tokens"][1]["learned"])
-        self.assertFalse(result["tokens"][2]["learned"])
+        self.assertEqual(result["tokens"][1]["base"], "hatsune miku")
+        self.assertEqual(result["tokens"][3]["base"], "A highly aesthetic Pixiv style illustration, clean composition.")
+        self.assertFalse(result["tokens"][4]["learned"])
 
 
 if __name__ == "__main__":
