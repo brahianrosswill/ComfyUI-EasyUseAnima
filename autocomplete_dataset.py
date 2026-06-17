@@ -221,16 +221,29 @@ def _token_base(token: str) -> str:
     token = str(token or "").strip()
     weighted = _WEIGHTED_TOKEN_RE.match(token)
     if weighted:
-        return weighted.group(1).strip(" ,\n\t")
+        token = weighted.group(1).strip(" ,\n\t")
     if token.startswith("@"):
         return token[1:].strip()
     return token
 
 
+def _is_artist_request(token: str) -> bool:
+    token = str(token or "").strip()
+    if token.startswith("@"):
+        return True
+    weighted = _WEIGHTED_TOKEN_RE.match(token)
+    return bool(weighted and weighted.group(1).strip().startswith("@"))
+
+
 def _token_section(token: str, entry: AutocompleteEntry | None) -> tuple[str, str]:
     base = _token_base(token)
+    is_artist_request = _is_artist_request(token)
     if _COUNT_RE.match(_normalize(base)):
         return ("count", "인원수")
+    if is_artist_request:
+        if entry and entry.category == "artist":
+            return ("artist", "작가")
+        return ("artist_unknown", "미등록 작가")
     if entry:
         labels = {
             "character": "캐릭터",
@@ -240,8 +253,6 @@ def _token_section(token: str, entry: AutocompleteEntry | None) -> tuple[str, st
             "general": "학습 태그",
         }
         return (entry.category, labels.get(entry.category, entry.category or "태그"))
-    if str(token or "").strip().startswith("@"):
-        return ("artist", "작가 후보")
     if len(base) >= 32 or re.search(r"[.!?]", base):
         return ("natural", "자연어")
     return ("unknown", "미확인")
@@ -292,9 +303,15 @@ def autocomplete_status(path: Path = AUTOCOMPLETE_CSV) -> dict:
     }
 
 
-def search_autocomplete(query: str, limit: int = 20, path: Path = AUTOCOMPLETE_CSV) -> dict:
+def search_autocomplete(
+    query: str,
+    limit: int = 20,
+    path: Path = AUTOCOMPLETE_CSV,
+    category: str | None = None,
+) -> dict:
     started = time.perf_counter()
     normalized_query = _normalize(query)
+    category = str(category or "").strip()
     if not normalized_query:
         return {
             "query": query,
@@ -305,6 +322,8 @@ def search_autocomplete(query: str, limit: int = 20, path: Path = AUTOCOMPLETE_C
 
     results: list[tuple[int, AutocompleteEntry]] = []
     for entry in _entries(path):
+        if category and entry.category != category:
+            continue
         tag_key = _normalize(entry.tag)
         if tag_key == normalized_query:
             score = 0
@@ -324,6 +343,7 @@ def search_autocomplete(query: str, limit: int = 20, path: Path = AUTOCOMPLETE_C
     limited = results[: max(1, min(limit, 50))]
     return {
         "query": query,
+        "category": category,
         "results": [
             {
                 "tag": entry.tag,

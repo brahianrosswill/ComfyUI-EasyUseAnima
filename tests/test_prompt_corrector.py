@@ -364,6 +364,26 @@ class AutocompleteDatasetTests(unittest.TestCase):
         self.assertEqual(korean["results"][0]["category"], "character")
         self.assertEqual(status["count"], 2)
 
+    def test_can_limit_autocomplete_to_artist_tags(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "tags.csv"
+            path.write_text(
+                "\n".join(
+                    [
+                        'same name,0,100,"[일반] 일반 태그"',
+                        'same name artist,1,80,"[작가] 작가 태그"',
+                        'artist hit,1,70,"[작가] 검색 대상"',
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            result = search_autocomplete("artist", path=path, category="artist")
+
+        self.assertTrue(result["results"])
+        self.assertTrue(all(item["category"] == "artist" for item in result["results"]))
+
     def test_lists_autocomplete_sources(self):
         sources = available_autocomplete_sources("localsmile_kr_wiki")
 
@@ -385,6 +405,7 @@ class AutocompleteDatasetTests(unittest.TestCase):
                         'hatsune miku,4,90,"[캐릭터] 하츠네 미쿠"',
                         'long hair,0,80,"[헤어] 장발"',
                         'series name,0,70,"[저작권 > 게임] 작품명"',
+                        'registered artist,1,60,"[작가] 등록 작가"',
                     ]
                 )
                 + "\n",
@@ -394,6 +415,7 @@ class AutocompleteDatasetTests(unittest.TestCase):
             result = classify_prompt_text(
                 (
                     "1girl, (hatsune miku:0.7), series name, "
+                    "(@registered_artist:0.5), @unregistered_artist, "
                     "(A highly aesthetic Pixiv style illustration, clean composition.:0.6), "
                     "unknown tag"
                 ),
@@ -401,12 +423,25 @@ class AutocompleteDatasetTests(unittest.TestCase):
             )
 
         sections = [token["section"] for token in result["tokens"]]
-        self.assertEqual(sections, ["count", "character", "copyright", "natural", "unknown"])
+        self.assertEqual(
+            sections,
+            [
+                "count",
+                "character",
+                "copyright",
+                "artist",
+                "artist_unknown",
+                "natural",
+                "unknown",
+            ],
+        )
         self.assertTrue(result["tokens"][0]["learned"])
         self.assertTrue(result["tokens"][1]["learned"])
         self.assertEqual(result["tokens"][1]["base"], "hatsune miku")
-        self.assertEqual(result["tokens"][3]["base"], "A highly aesthetic Pixiv style illustration, clean composition.")
-        self.assertFalse(result["tokens"][4]["learned"])
+        self.assertEqual(result["tokens"][3]["base"], "registered_artist")
+        self.assertEqual(result["tokens"][4]["base"], "unregistered_artist")
+        self.assertEqual(result["tokens"][5]["base"], "A highly aesthetic Pixiv style illustration, clean composition.")
+        self.assertFalse(result["tokens"][6]["learned"])
 
 
 if __name__ == "__main__":

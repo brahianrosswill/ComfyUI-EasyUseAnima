@@ -262,6 +262,13 @@ function currentToken(input) {
   };
 }
 
+function autocompleteQuery(token) {
+  const raw = String(token.query || "");
+  const artistOnly = raw.startsWith("@");
+  const query = artistOnly ? raw.slice(1).trim() : raw;
+  return { query, artistOnly };
+}
+
 function copyCaretMirrorStyle(input, mirror) {
   const style = getComputedStyle(input);
   const properties = [
@@ -348,13 +355,14 @@ function positionPopup(input) {
   menu.style.width = `${width}px`;
 }
 
-async function search(query) {
-  const key = query.toLocaleLowerCase();
+async function search(query, artistOnly = false) {
+  const key = `${artistOnly ? "artist" : "all"}:${query.toLocaleLowerCase()}`;
   if (cache.has(key)) {
     return cache.get(key);
   }
+  const category = artistOnly ? "&category=artist" : "";
   const response = await fetch(
-    `/easyuse_anima/autocomplete?q=${encodeURIComponent(query)}&limit=${MAX_RESULTS}`,
+    `/easyuse_anima/autocomplete?q=${encodeURIComponent(query)}&limit=${MAX_RESULTS}${category}`,
   );
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
@@ -385,7 +393,7 @@ function commitSuggestion(state, entry) {
   const after = token.value.slice(token.end);
   const prefix = before && !/[\s,\n]$/.test(before) ? `${before} ` : before;
   const suffix = after.startsWith(",") || after.startsWith("\n") || after === "" ? after : `, ${after}`;
-  const insert = entry.tag;
+  const insert = token.query.startsWith("@") ? `@${entry.tag}` : entry.tag;
   state.input.value = `${prefix}${insert}${suffix}`;
   const caret = prefix.length + insert.length;
   state.input.setSelectionRange(caret, caret);
@@ -467,13 +475,14 @@ function hookWidget(node, widget) {
       return;
     }
     const token = currentToken(input);
-    if (token.query.length < MIN_QUERY_LENGTH) {
+    const context = autocompleteQuery(token);
+    if (context.query.length < MIN_QUERY_LENGTH) {
       hidePopup();
       return;
     }
     const seq = ++updateSeq;
     try {
-      const results = await search(token.query);
+      const results = await search(context.query, context.artistOnly);
       if (document.activeElement === input && seq === updateSeq) {
         renderResults(state, results);
       }

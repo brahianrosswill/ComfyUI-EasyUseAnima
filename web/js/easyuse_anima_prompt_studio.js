@@ -20,15 +20,16 @@ const FIELD_HEIGHTS = {
 const SECTION_STYLES = {
   count: { label: "인원수", color: "#60a5fa", background: "rgba(37, 99, 235, 0.18)", weight: 700 },
   character: { label: "캐릭터", color: "#f472b6", background: "rgba(219, 39, 119, 0.18)", weight: 700 },
-  artist: { label: "@작가", color: "#a78bfa", background: "rgba(124, 58, 237, 0.18)", weight: 700 },
+  artist: { label: "작가", color: "#a78bfa", background: "rgba(124, 58, 237, 0.18)", weight: 700 },
+  artist_unknown: { label: "미등록 작가", color: "#f87171", background: "transparent", underline: true, weight: 400 },
   copyright: { label: "작품", color: "#fb923c", background: "rgba(234, 88, 12, 0.18)", weight: 700 },
   meta: { label: "메타", color: "#94a3b8", background: "rgba(100, 116, 139, 0.18)", weight: 600 },
   general: { label: "학습 태그", color: "#4ade80", background: "rgba(22, 163, 74, 0.16)", weight: 600 },
   natural: { label: "자연어", color: "#cbd5e1", background: "rgba(71, 85, 105, 0.16)", weight: 400 },
-  unknown: { label: "미확인", color: "#cbd5e1", background: "transparent", weight: 400 },
+  unknown: { label: "미확인", color: "#cbd5e1", background: "transparent", underline: true, weight: 400 },
 };
 
-const LEGEND_ITEMS = ["count", "character", "artist", "copyright", "general", "meta", "natural", "unknown"];
+const LEGEND_ITEMS = ["count", "character", "artist", "copyright", "general", "meta", "natural", "artist_unknown", "unknown"];
 const LEGEND_HEIGHT = 45;
 const LEGEND_ROW_HEIGHT = 14;
 
@@ -185,6 +186,14 @@ function tokenStyle(token) {
   ];
   if (style.background && style.background !== "transparent") {
     rules.push(`background: ${style.background}`, "border-radius: 3px");
+  }
+  if (style.underline) {
+    rules.push(
+      "text-decoration-line: underline",
+      "text-decoration-style: wavy",
+      "text-decoration-color: #ef4444",
+      "text-underline-offset: 2px",
+    );
   }
   return rules.join("; ");
 }

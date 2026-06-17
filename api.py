@@ -85,12 +85,20 @@ if server is not None and web is not None:
     @server.PromptServer.instance.routes.get("/easyuse_anima/autocomplete")
     async def autocomplete_handler(request):
         query = request.query.get("q", "")
+        category = request.query.get("category", "")
         try:
             limit = int(request.query.get("limit", "20"))
         except ValueError:
             limit = 20
         _, path = resolve_autocomplete_source_path(resolve_autocomplete_source())
-        return web.json_response(search_autocomplete(query, limit=limit, path=path))
+        return web.json_response(
+            search_autocomplete(
+                query,
+                limit=limit,
+                path=path,
+                category=category if category == "artist" else None,
+            )
+        )
 
     @server.PromptServer.instance.routes.post("/easyuse_anima/classify_prompt")
     async def classify_prompt_handler(request):
