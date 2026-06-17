@@ -18,15 +18,19 @@ const FIELD_HEIGHTS = {
 };
 
 const SECTION_STYLES = {
-  count: { label: "인원수", color: "#60a5fa", weight: 700 },
-  character: { label: "캐릭터", color: "#f472b6", weight: 700 },
-  artist: { label: "작가", color: "#a78bfa", weight: 700 },
-  copyright: { label: "작품", color: "#fb923c", weight: 700 },
-  meta: { label: "메타", color: "#94a3b8", weight: 600 },
-  general: { label: "학습 태그", color: "#4ade80", weight: 600 },
-  natural: { label: "자연어", color: "#cbd5e1", weight: 400 },
-  unknown: { label: "미확인", color: "#f87171", weight: 700 },
+  count: { label: "인원수", color: "#60a5fa", background: "rgba(37, 99, 235, 0.18)", weight: 700 },
+  character: { label: "캐릭터", color: "#f472b6", background: "rgba(219, 39, 119, 0.18)", weight: 700 },
+  artist: { label: "작가", color: "#a78bfa", background: "rgba(124, 58, 237, 0.18)", weight: 700 },
+  copyright: { label: "작품", color: "#fb923c", background: "rgba(234, 88, 12, 0.18)", weight: 700 },
+  meta: { label: "메타", color: "#94a3b8", background: "rgba(100, 116, 139, 0.18)", weight: 600 },
+  general: { label: "학습 태그", color: "#4ade80", background: "rgba(22, 163, 74, 0.16)", weight: 600 },
+  natural: { label: "자연어", color: "#cbd5e1", background: "rgba(71, 85, 105, 0.16)", weight: 400 },
+  unknown: { label: "미확인", color: "#f87171", background: "rgba(220, 38, 38, 0.18)", weight: 700 },
 };
+
+const LEGEND_ITEMS = ["count", "character", "artist", "copyright", "general", "meta", "natural", "unknown"];
+const LEGEND_HEIGHT = 58;
+const LEGEND_ROW_HEIGHT = 18;
 
 const WEIGHTED_TOKEN_RE = /^\((.*):[-+]?\d+(?:\.\d+)?\)$/s;
 const INLINE_SPACE_RE = /[ \t]+/g;
@@ -144,8 +148,10 @@ function tokenStyle(token) {
   const opacity = token?.learned || token?.section === "count" ? 1 : 0.88;
   return [
     `color: ${style.color}`,
+    `background: ${style.background}`,
     `font-weight: ${style.weight}`,
     `opacity: ${opacity}`,
+    "border-radius: 3px",
   ].join("; ");
 }
 
@@ -259,7 +265,7 @@ function ensureHighlightOverlay(input) {
     "word-break: break-word",
     "pointer-events: none",
     "z-index: 0",
-    "background: transparent",
+    "background: rgba(15, 23, 42, 0.62)",
     "color: var(--input-text, #ddd)",
   ].join("; ");
   copyInputTextMetrics(input, overlay);
@@ -276,6 +282,85 @@ function ensureHighlightOverlay(input) {
   input.__easyuseAnimaHighlightOverlay = overlay;
   syncOverlayBounds(input, overlay);
   return overlay;
+}
+
+function desiredLegendHeight(ctx, width) {
+  let x = 14;
+  let rows = 1;
+  ctx.font = "11px sans-serif";
+  for (const key of LEGEND_ITEMS) {
+    const label = SECTION_STYLES[key].label;
+    const itemWidth = ctx.measureText(label).width + 36;
+    if (x + itemWidth > width - 12) {
+      x = 14;
+      rows += 1;
+    }
+    x += itemWidth + 10;
+  }
+  return Math.max(LEGEND_HEIGHT, 34 + rows * LEGEND_ROW_HEIGHT);
+}
+
+function drawLegend(ctx, node, widget, width, y) {
+  const nextHeight = desiredLegendHeight(ctx, width);
+  if (Math.abs(nextHeight - widget.__height) > 2) {
+    widget.__height = nextHeight;
+    refreshNodeSize(node);
+  }
+  const height = widget.__height || LEGEND_HEIGHT;
+  ctx.save();
+  ctx.fillStyle = "rgba(15, 23, 42, 0.58)";
+  ctx.beginPath();
+  ctx.roundRect?.(8, y + 5, width - 16, height - 10, 7);
+  if (!ctx.roundRect) {
+    ctx.rect(8, y + 5, width - 16, height - 10);
+  }
+  ctx.fill();
+
+  ctx.font = "10px sans-serif";
+  ctx.fillStyle = "#94a3b8";
+  ctx.fillText("Color legend", 14, y + 18);
+
+  let x = 14;
+  let rowY = y + 34;
+  ctx.font = "11px sans-serif";
+  for (const key of LEGEND_ITEMS) {
+    const style = SECTION_STYLES[key];
+    const label = style.label;
+    const itemWidth = ctx.measureText(label).width + 36;
+    if (x + itemWidth > width - 12) {
+      x = 14;
+      rowY += LEGEND_ROW_HEIGHT;
+    }
+    ctx.fillStyle = style.background;
+    ctx.fillRect(x, rowY - 10, 14, 14);
+    ctx.fillStyle = style.color;
+    ctx.fillText(label, x + 19, rowY + 1);
+    x += itemWidth + 10;
+  }
+  ctx.restore();
+}
+
+function ensureLegendWidget(node) {
+  const name = "easyuse_anima_color_legend";
+  let widget = findWidget(node, name);
+  if (widget) {
+    return widget;
+  }
+  widget = {
+    name,
+    type: "easyuse_anima_color_legend",
+    serialize: false,
+    __height: LEGEND_HEIGHT,
+    computeSize(width) {
+      return [width, this.__height];
+    },
+    draw(ctx, node, width, y) {
+      drawLegend(ctx, node, this, width, y);
+    },
+  };
+  node.widgets ||= [];
+  node.widgets.push(widget);
+  return widget;
 }
 
 function updateHighlight(widget, tokens = widget.__easyuseAnimaTokens || []) {
@@ -409,6 +494,7 @@ function hookStudioNode(node) {
     updateField();
   }
 
+  ensureLegendWidget(node);
   refreshNodeSize(node);
 }
 
