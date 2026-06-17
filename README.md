@@ -59,7 +59,7 @@ Input fields:
 
 - `quality_tags`: leading quality tags.
 - `trigger_and_artist_tags`: manual model triggers and `@artist` tags.
-- `lora_trigger_tags`: trigger tags received from a LoRA manager.
+- `lora_trigger_tags`: one-line trigger tags received from a LoRA manager.
 - `prompt`: main prompt body, including NAIA output.
 - `trailing_quality_tags`: trailing quality or style tags.
 

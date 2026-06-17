@@ -360,9 +360,9 @@ class EasyUseAnimaPromptBuilder:
                     "tooltip": "Manual model triggers and @artist tags.",
                 }),
                 "lora_trigger_tags": ("STRING", {
-                    "multiline": True,
+                    "multiline": False,
                     "default": "",
-                    "tooltip": "Trigger tags received from a LoRA manager or pasted manually.",
+                    "tooltip": "One-line trigger tags received from a LoRA manager or pasted manually.",
                 }),
                 "prompt": ("STRING", {
                     "multiline": True,
