@@ -1,4 +1,4 @@
-"""ANIMA prompt/caption correction helpers.
+"""ANIMA prompt correction helpers.
 
 This package is intentionally dependency-light. It does not import torch,
 ComfyUI, model code, or taggers, so the same core can be reused by CLI tools

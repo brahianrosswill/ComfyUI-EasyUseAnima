@@ -1,6 +1,6 @@
 # ANIMA Prompt Correction Core
 
-Dependency-light prompt/caption correction helpers for ANIMA-style tag order.
+Dependency-light prompt correction helpers for ANIMA-style tag order.
 
 This vendored copy is scoped for the ComfyUI EasyUse Anima node pack MVP. It
 does not import ComfyUI, torch, model loading code, taggers, or a general tag DB.
@@ -8,7 +8,7 @@ does not import ComfyUI, torch, model loading code, taggers, or a general tag DB
 ## MVP Scope
 
 - Danbooru-style comma-separated prompt parsing
-- newline-preserving caption parsing
+- ComfyUI/NovelAI prompt weighting syntax preservation
 - tag normalization
 - AnimaDex character / copyright / artist lookup
 - character core tag lookup from AnimaDex exports
@@ -27,6 +27,13 @@ quality / meta / year / safety
 -> artist
 -> general or unknown tags
 ```
+
+## Prompt Syntax
+
+- Unescaped parentheses are prompt weighting syntax and are preserved, for
+  example `(long_hair:1.2)`.
+- Literal parentheses in tag names are rendered escaped as `\(` and `\)`.
+- Commas inside unescaped parentheses are preserved inside the weighted token.
 
 Example:
 

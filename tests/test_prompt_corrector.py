@@ -15,8 +15,6 @@ class PromptCorrectorTests(unittest.TestCase):
     def test_corrects_without_animadex_data(self):
         corrected, report = EasyUseAnimaPromptCorrector().correct(
             "long_hair, 1girl, long_hair",
-            "prompt",
-            True,
             True,
             "",
             "",
@@ -26,9 +24,29 @@ class PromptCorrectorTests(unittest.TestCase):
             "",
         )
 
-        self.assertEqual(corrected, "1girl, @no-artist, long hair")
+        self.assertEqual(corrected, "1girl, long hair")
         data = json.loads(report)
         self.assertEqual(data["duplicate_tags"], ["long hair"])
+
+    def test_preserves_prompt_weight_syntax_and_escapes_literal_parentheses(self):
+        corrected, report = EasyUseAnimaPromptCorrector().correct(
+            "(long_hair:1.2), character_\\(series\\), 1girl, foo_(bar)",
+            True,
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+        )
+
+        self.assertEqual(
+            corrected,
+            "1girl, (long hair:1.2), character \\(series\\), foo \\(bar\\)",
+        )
+        data = json.loads(report)
+        self.assertIn("long hair", data["unknown_tags"])
+        self.assertIn("character \\(series\\)", data["unknown_tags"])
 
     def test_uses_animadex_indexes(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -68,8 +86,6 @@ class PromptCorrectorTests(unittest.TestCase):
 
             corrected, report = EasyUseAnimaPromptCorrector().correct(
                 "long_hair, vocaloid, @artist_name, hatsune_miku, 1girl",
-                "prompt",
-                True,
                 True,
                 "",
                 "",

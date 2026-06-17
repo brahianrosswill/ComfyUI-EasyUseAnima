@@ -202,7 +202,7 @@ def _get_workflow_node(extra_pnginfo, node_id: str):
 
 
 class EasyUseAnimaPromptCorrector:
-    """ANIMA prompt/caption order correction node."""
+    """ANIMA prompt order correction node."""
 
     @classmethod
     def INPUT_TYPES(cls):
@@ -211,19 +211,11 @@ class EasyUseAnimaPromptCorrector:
                 "prompt": ("STRING", {
                     "multiline": True,
                     "default": "",
-                    "tooltip": "Prompt or caption text to normalize and reorder for ANIMA.",
-                }),
-                "profile": (["prompt", "caption"], {
-                    "default": "prompt",
-                    "tooltip": "prompt uses comma-separated tags. caption preserves newline-separated caption files.",
+                    "tooltip": "Comma-separated prompt text to normalize and reorder for ANIMA.",
                 }),
                 "validate_artist_tags": ("BOOLEAN", {
                     "default": True,
                     "tooltip": "Only AnimaDex artists and manual overrides are treated as @artist tags.",
-                }),
-                "insert_no_artist": ("BOOLEAN", {
-                    "default": True,
-                    "tooltip": "Insert @no-artist when no valid artist tag exists.",
                 }),
                 "artist_overrides": ("STRING", {
                     "multiline": True,
@@ -273,9 +265,7 @@ class EasyUseAnimaPromptCorrector:
     def correct(
         self,
         prompt: str,
-        profile: str,
         validate_artist_tags: bool,
-        insert_no_artist: bool,
         artist_overrides: str,
         artist_exclusions: str,
         animadex_characters_csv: str,
@@ -293,10 +283,9 @@ class EasyUseAnimaPromptCorrector:
             )
             result = correct_prompt(
                 str(prompt or ""),
-                profile=str(profile or "prompt"),
+                profile="prompt",
                 knowledge_base=kb,
                 validate_artist_tags=_as_bool(validate_artist_tags, True),
-                insert_no_artist=_as_bool(insert_no_artist, True),
                 artist_overrides=_split_tag_text(artist_overrides),
                 artist_exclusions=_split_tag_text(artist_exclusions),
             )

@@ -2,19 +2,95 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 from .knowledge import PromptKnowledgeBase
 from .models import CorrectionResult, TagToken
 from .normalize import lookup_key, normalize_tag, render_artist_tag
 from .ordering import classify_tag, section_sort_key
 from .parser import parse_prompt, render_tags
 
-NO_ARTIST_TAG = "@no-artist"
+
+@dataclass(frozen=True)
+class PromptSyntax:
+    tag_text: str
+    prefix: str = ""
+    weight_suffix: str = ""
+    suffix: str = ""
+
+
+def _is_escaped(text: str, index: int) -> bool:
+    slash_count = 0
+    cursor = index - 1
+    while cursor >= 0 and text[cursor] == "\\":
+        slash_count += 1
+        cursor -= 1
+    return slash_count % 2 == 1
+
+
+def _outer_parens_span(text: str) -> bool:
+    if not text.startswith("("):
+        return False
+    depth = 0
+    for index, char in enumerate(text):
+        if char == "(" and not _is_escaped(text, index):
+            depth += 1
+        elif char == ")" and not _is_escaped(text, index):
+            depth -= 1
+            if depth == 0 and index != len(text) - 1:
+                return False
+    return depth == 0
+
+
+def _last_unescaped_colon(text: str) -> int:
+    for index in range(len(text) - 1, -1, -1):
+        if text[index] == ":" and not _is_escaped(text, index):
+            return index
+    return -1
+
+
+def _prompt_syntax(raw: str) -> PromptSyntax:
+    text = str(raw or "").strip()
+    prefix = ""
+    suffix = ""
+    while _outer_parens_span(text):
+        prefix += "("
+        suffix = ")" + suffix
+        text = text[1:-1].strip()
+
+    colon_index = _last_unescaped_colon(text) if prefix else -1
+    if colon_index > 0 and colon_index < len(text) - 1:
+        weight_suffix = text[colon_index:].strip()
+        text = text[:colon_index].strip()
+    else:
+        weight_suffix = ""
+
+    return PromptSyntax(
+        tag_text=text,
+        prefix=prefix,
+        weight_suffix=weight_suffix,
+        suffix=suffix,
+    )
+
+
+def _escape_literal_parentheses(text: str) -> str:
+    chars: list[str] = []
+    for index, char in enumerate(text):
+        if char in "()" and not _is_escaped(text, index):
+            chars.append("\\")
+        chars.append(char)
+    return "".join(chars)
 
 
 def _render_token(raw: str, section_name: str) -> str:
     if section_name == "artist":
-        return render_artist_tag(raw)
-    return normalize_tag(raw)
+        return _escape_literal_parentheses(render_artist_tag(raw))
+    return _escape_literal_parentheses(normalize_tag(raw))
+
+
+def _render_prompt_token(syntax: PromptSyntax, normalized: str, section_name: str) -> str:
+    rendered = _render_token(normalized, section_name)
+    return f"{syntax.prefix}{rendered}{syntax.weight_suffix}{syntax.suffix}"
 
 
 def _tag_key_set(tags) -> set[str]:
@@ -31,9 +107,6 @@ def _classify_with_artist_options(
     artist_exclusions: set[str],
 ):
     key = lookup_key(normalized)
-    is_no_artist = key == lookup_key(NO_ARTIST_TAG)
-    if is_no_artist:
-        return classify_tag(NO_ARTIST_TAG, info)
     if key in artist_exclusions:
         return classify_tag(normalized.lstrip("@"), None)
     if key in artist_overrides:
@@ -45,19 +118,6 @@ def _classify_with_artist_options(
             return classify_tag(normalized, info)
         return classify_tag(normalized.lstrip("@"), None)
     return classify_tag(normalized, info)
-
-
-def _no_artist_token() -> TagToken:
-    key = lookup_key(NO_ARTIST_TAG)
-    return TagToken(
-        raw=NO_ARTIST_TAG,
-        normalized=NO_ARTIST_TAG,
-        lookup_key=key,
-        text=NO_ARTIST_TAG,
-        known=True,
-        section=classify_tag(NO_ARTIST_TAG),
-        source="manual",
-    )
 
 
 def inspect_prompt(
@@ -81,10 +141,11 @@ def inspect_prompt(
     duplicates: list[str] = []
 
     for raw in parsed.tokens:
-        normalized = normalize_tag(raw)
+        syntax = _prompt_syntax(raw)
+        normalized = normalize_tag(syntax.tag_text)
         key = lookup_key(normalized)
         info = kb.lookup(normalized)
-        manual_known = key == lookup_key(NO_ARTIST_TAG) or key in override_keys
+        manual_known = key in override_keys
         section = _classify_with_artist_options(
             normalized,
             info=info,
@@ -105,7 +166,7 @@ def inspect_prompt(
                 raw=raw,
                 normalized=normalized,
                 lookup_key=key,
-                text=_render_token(normalized, section.value),
+                text=_render_prompt_token(syntax, normalized, section.value),
                 known=info is not None or manual_known,
                 section=section,
                 category_path=info.category_path if info else (),
@@ -135,7 +196,6 @@ def correct_prompt(
     profile: str = "prompt",
     knowledge_base: PromptKnowledgeBase | None = None,
     validate_artist_tags: bool = False,
-    insert_no_artist: bool = False,
     artist_overrides=(),
     artist_exclusions=(),
 ) -> CorrectionResult:
@@ -161,13 +221,6 @@ def correct_prompt(
             continue
         seen.add(token.lookup_key)
         kept.append((index, token))
-
-    if insert_no_artist and not any(
-        token.section.value == "artist" for _, token in kept
-    ):
-        no_artist = _no_artist_token()
-        if no_artist.lookup_key not in seen:
-            kept.append((len(inspected.tokens), no_artist))
 
     kept.sort(key=lambda item: section_sort_key(item[0], item[1].section))
     ordered = [token.text for _, token in kept]

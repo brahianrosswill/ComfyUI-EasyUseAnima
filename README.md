@@ -50,20 +50,25 @@ Outputs:
 - `corrected_prompt`
 - `report`
 
-The node accepts a prompt or caption and returns a normalized ANIMA-ordered
-prompt plus a JSON report. It uses the vendored `anima_prompt` MVP core and
-only loads AnimaDex character/artist data. It does not load a general tag DB.
+The node accepts a comma-separated prompt and returns a normalized
+ANIMA-ordered prompt plus a JSON report. It uses the vendored `anima_prompt`
+MVP core and only loads AnimaDex character/artist data. It does not load a
+general tag DB.
 
 Main controls:
 
-- `profile=prompt`: parse comma-separated prompt tags and output comma-separated
-  tags.
-- `profile=caption`: preserve newline-separated caption files.
 - `validate_artist_tags=true`: only AnimaDex artist triggers and manual
   overrides are treated as `@artist` tags.
-- `insert_no_artist=true`: insert `@no-artist` when no valid artist tag exists.
 - `artist_overrides`: manual comma- or newline-separated artist triggers.
 - `artist_exclusions`: tags that must not be treated as artists.
+
+Prompt syntax:
+
+- Unescaped parentheses are treated as prompt weighting syntax and are preserved,
+  for example `(long_hair:1.2)`.
+- Literal parentheses in tag names are escaped as `\(` and `\)` in the corrected
+  output.
+- Commas inside unescaped parentheses are not split as top-level tag separators.
 
 AnimaDex data can be supplied with explicit paths:
 
