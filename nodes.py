@@ -421,34 +421,37 @@ class EasyUseAnimaPromptBuilder:
         pin_triggers = _as_bool(pin_trigger_tags_to_front, False)
 
         trigger_prompt = _join_prompt_tokens(trigger_and_artist_tags, lora_trigger_tags)
-        quality_prompt = _join_prompt_tokens(quality_tags, trailing_quality_tags)
+        quality_prompt = _join_prompt_tokens(quality_tags)
         body_prompt = _join_prompt_tokens(prompt)
+        trailing_prompt = _join_prompt_tokens(trailing_quality_tags)
 
         if pin_triggers:
             metadata_body = _correct_builder_prompt(
-                _join_prompt_tokens(quality_tags, body_prompt, trailing_quality_tags)
+                _join_prompt_tokens(quality_tags, body_prompt)
             )
-            regular_prompt = _join_prompt_tokens(trigger_prompt, metadata_body)
+            regular_prompt = _join_prompt_tokens(trigger_prompt, metadata_body, trailing_prompt)
             amg_prompt = _join_prompt_tokens(
                 trigger_prompt,
                 _correct_builder_prompt(body_prompt),
+                trailing_prompt,
             )
             metadata_prompt = regular_prompt
         else:
-            metadata_prompt = _correct_builder_prompt(
+            metadata_core = _correct_builder_prompt(
                 _join_prompt_tokens(
                     quality_tags,
                     trigger_prompt,
                     body_prompt,
-                    trailing_quality_tags,
                 ),
                 artist_overrides=trigger_prompt,
             )
+            metadata_prompt = _join_prompt_tokens(metadata_core, trailing_prompt)
             regular_prompt = metadata_prompt
-            amg_prompt = _correct_builder_prompt(
+            amg_core = _correct_builder_prompt(
                 _join_prompt_tokens(trigger_prompt, body_prompt),
                 artist_overrides=trigger_prompt,
             )
+            amg_prompt = _join_prompt_tokens(amg_core, trailing_prompt)
 
         output_prompt = amg_prompt if use_amg else regular_prompt
 
