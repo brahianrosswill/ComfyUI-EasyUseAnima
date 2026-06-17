@@ -32,7 +32,7 @@ const SECTION_STYLES = {
 const LEGEND_ITEMS = ["count", "character", "artist", "copyright", "general", "meta", "natural", "artist_unknown", "unknown"];
 const LEGEND_TOP_GAP = 14;
 const LEGEND_ROW_HEIGHT = 18;
-const LEGEND_COLUMNS = 5;
+const LEGEND_COLUMNS = 2;
 
 const WEIGHTED_TOKEN_RE = /^\((.*):[-+]?\d+(?:\.\d+)?\)$/s;
 const INLINE_SPACE_RE = /[ \t]+/g;
@@ -462,7 +462,7 @@ function ensureHighlightOverlay(input) {
 }
 
 function desiredLegendHeight() {
-  return LEGEND_TOP_GAP + 16 + 2 * LEGEND_ROW_HEIGHT;
+  return LEGEND_TOP_GAP + 16 + Math.ceil(LEGEND_ITEMS.length / LEGEND_COLUMNS) * LEGEND_ROW_HEIGHT;
 }
 
 function drawLegend(ctx, node, widget, width, y) {
@@ -481,11 +481,12 @@ function drawLegend(ctx, node, widget, width, y) {
   const availableWidth = Math.max(160, width - 28);
   const columnWidth = availableWidth / LEGEND_COLUMNS;
   ctx.font = "9px sans-serif";
+  const rows = Math.ceil(LEGEND_ITEMS.length / LEGEND_COLUMNS);
   for (const [index, key] of LEGEND_ITEMS.entries()) {
     const style = SECTION_STYLES[key];
     const label = style.label;
-    const column = index % LEGEND_COLUMNS;
-    const row = Math.floor(index / LEGEND_COLUMNS);
+    const column = Math.floor(index / rows);
+    const row = index % rows;
     const x = left + column * columnWidth;
     const rowY = y + LEGEND_TOP_GAP + 29 + row * LEGEND_ROW_HEIGHT;
     ctx.fillStyle = style.background;
