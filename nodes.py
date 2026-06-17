@@ -6,6 +6,11 @@ import logging
 import re
 from typing import Optional
 
+try:
+    from .anima_prompt import correct_prompt, load_knowledge_base
+except ImportError:  # allows simple local import tests outside ComfyUI's package loader
+    from anima_prompt import correct_prompt, load_knowledge_base
+
 logger = logging.getLogger("ComfyUI-EasyUseAnima")
 
 DEFAULT_HOST = "127.0.0.1"
@@ -76,6 +81,15 @@ def _clean_prompt(value: str) -> str:
 
 def _stable_change_key(payload: dict) -> str:
     return json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+
+
+def _split_tag_text(value: str) -> list[str]:
+    if not value:
+        return []
+    parts: list[str] = []
+    for line in str(value).splitlines():
+        parts.extend(part.strip() for part in line.split(","))
+    return [part for part in parts if part]
 
 
 def _fit_to_1mp(width: int, height: int) -> tuple[int, int]:
@@ -178,6 +192,121 @@ def _get_workflow_node(extra_pnginfo, node_id: str):
             if isinstance(subgraph, dict) and isinstance(subgraph.get("nodes"), list):
                 nodes_list = subgraph["nodes"]
     return found
+
+
+class EasyUseAnimaPromptCorrector:
+    """ANIMA prompt/caption order correction node."""
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "prompt": ("STRING", {
+                    "multiline": True,
+                    "default": "",
+                    "tooltip": "Prompt or caption text to normalize and reorder for ANIMA.",
+                }),
+                "profile": (["prompt", "caption"], {
+                    "default": "prompt",
+                    "tooltip": "prompt uses comma-separated tags. caption preserves newline-separated caption files.",
+                }),
+                "validate_artist_tags": ("BOOLEAN", {
+                    "default": True,
+                    "tooltip": "Only AnimaDex artists and manual overrides are treated as @artist tags.",
+                }),
+                "insert_no_artist": ("BOOLEAN", {
+                    "default": True,
+                    "tooltip": "Insert @no-artist when no valid artist tag exists.",
+                }),
+                "artist_overrides": ("STRING", {
+                    "multiline": True,
+                    "default": "",
+                    "tooltip": "Comma- or newline-separated manual triggers to treat like artist tags.",
+                }),
+                "artist_exclusions": ("STRING", {
+                    "multiline": True,
+                    "default": "",
+                    "tooltip": "Comma- or newline-separated triggers that must not be treated as artists.",
+                }),
+                "animadex_characters_csv": ("STRING", {
+                    "multiline": False,
+                    "default": "",
+                    "tooltip": "Optional explicit AnimaDex characters.csv path.",
+                }),
+                "animadex_artists_csv": ("STRING", {
+                    "multiline": False,
+                    "default": "",
+                    "tooltip": "Optional explicit AnimaDex artists.csv path.",
+                }),
+                "animadex_character_index": ("STRING", {
+                    "multiline": False,
+                    "default": "",
+                    "tooltip": "Optional explicit AnimaDex character_index.jsonl path.",
+                }),
+                "animadex_artist_index": ("STRING", {
+                    "multiline": False,
+                    "default": "",
+                    "tooltip": "Optional explicit AnimaDex artist_index.jsonl path.",
+                }),
+            }
+        }
+
+    RETURN_TYPES = ("STRING", "STRING")
+    RETURN_NAMES = ("corrected_prompt", "report")
+    FUNCTION = "correct"
+    CATEGORY = "EasyUse Anima/Prompt"
+
+    @classmethod
+    def IS_CHANGED(cls, **kwargs):
+        return _stable_change_key({
+            "mode": "prompt_corrector",
+            **{key: str(value) for key, value in sorted(kwargs.items())},
+        })
+
+    def correct(
+        self,
+        prompt: str,
+        profile: str,
+        validate_artist_tags: bool,
+        insert_no_artist: bool,
+        artist_overrides: str,
+        artist_exclusions: str,
+        animadex_characters_csv: str,
+        animadex_artists_csv: str,
+        animadex_character_index: str,
+        animadex_artist_index: str,
+    ):
+        try:
+            kb = load_knowledge_base(
+                animadex_characters_csv=animadex_characters_csv.strip() or None,
+                animadex_artists_csv=animadex_artists_csv.strip() or None,
+                animadex_character_index=animadex_character_index.strip() or None,
+                animadex_artist_index=animadex_artist_index.strip() or None,
+                allow_missing=True,
+            )
+            result = correct_prompt(
+                str(prompt or ""),
+                profile=str(profile or "prompt"),
+                knowledge_base=kb,
+                validate_artist_tags=_as_bool(validate_artist_tags, True),
+                insert_no_artist=_as_bool(insert_no_artist, True),
+                artist_overrides=_split_tag_text(artist_overrides),
+                artist_exclusions=_split_tag_text(artist_exclusions),
+            )
+        except Exception as exc:
+            raise RuntimeError(f"[EasyUse Anima] prompt correction failed: {exc}") from exc
+
+        report = {
+            "changed": result.changed,
+            "unknown_tags": list(result.unknown_tags),
+            "duplicate_tags": list(result.duplicate_tags),
+            "warnings": list(result.warnings),
+            "sections": result.report.get("sections", []),
+        }
+        return (
+            result.text,
+            json.dumps(report, ensure_ascii=False, indent=2),
+        )
 
 
 class EasyUseAnimaNAIARandomPrompt:
