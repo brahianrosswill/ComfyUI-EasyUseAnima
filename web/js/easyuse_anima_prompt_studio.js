@@ -44,7 +44,7 @@ function refreshNodeSize(node) {
       Math.abs(width - (node.size?.[0] || 0)) > 1
       || Math.abs(height - (node.size?.[1] || 0)) > 1
     ) {
-      node.onResize?.([width, height]);
+      node.setSize?.([width, height]);
     }
     app.graph.setDirtyCanvas(true, true);
   });
@@ -225,16 +225,10 @@ function copyInputTextMetrics(input, overlay) {
 }
 
 function syncOverlayBounds(input, overlay) {
-  const parent = input.parentElement;
-  if (!parent) {
-    return;
-  }
-  const parentRect = parent.getBoundingClientRect();
-  const inputRect = input.getBoundingClientRect();
-  overlay.style.left = `${inputRect.left - parentRect.left}px`;
-  overlay.style.top = `${inputRect.top - parentRect.top}px`;
-  overlay.style.width = `${inputRect.width}px`;
-  overlay.style.height = `${inputRect.height}px`;
+  overlay.style.left = `${input.offsetLeft}px`;
+  overlay.style.top = `${input.offsetTop}px`;
+  overlay.style.width = `${input.offsetWidth}px`;
+  overlay.style.height = `${input.offsetHeight}px`;
   overlay.scrollTop = input.scrollTop;
   overlay.scrollLeft = input.scrollLeft;
 }

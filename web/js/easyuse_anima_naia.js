@@ -111,7 +111,14 @@ function refreshNodeSize(node) {
   requestAnimationFrame(() => {
     applyPreviewFillHeight(node);
     const size = node.computeSize();
-    node.onResize?.([Math.max(size[0], node.size[0]), Math.max(size[1], node.size[1])]);
+    const width = Math.max(size[0], node.size?.[0] || size[0]);
+    const height = Math.max(size[1], node.size?.[1] || size[1]);
+    if (
+      Math.abs(width - (node.size?.[0] || 0)) > 1
+      || Math.abs(height - (node.size?.[1] || 0)) > 1
+    ) {
+      node.setSize?.([width, height]);
+    }
     applyPreviewFillHeight(node);
     app.graph.setDirtyCanvas(true, false);
   });
