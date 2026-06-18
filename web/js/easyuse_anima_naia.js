@@ -2,7 +2,7 @@ import { app } from "../../../scripts/app.js";
 import { ComfyWidgets } from "../../../scripts/widgets.js";
 
 const NODE_TYPE = "EasyUseAnimaNAIARandomPrompt";
-const PREVIEW_MIN_HEIGHT = 120;
+const PREVIEW_MIN_HEIGHT = 92;
 const PREVIEW_BOTTOM_PADDING = 16;
 const STORAGE_WIDGETS = [
   "cached_prompt",
@@ -120,8 +120,10 @@ function refreshNodeSize(node) {
   requestAnimationFrame(() => {
     applyPreviewFillHeight(node);
     const size = node.computeSize();
+    const preview = findWidget(node, "easyuse_anima_preview");
+    const previewVisible = preview && !preview.hidden;
     const width = Math.max(size[0], node.size?.[0] || size[0]);
-    const height = Math.max(size[1], node.size?.[1] || size[1]);
+    const height = previewVisible ? Math.max(size[1], node.size?.[1] || size[1]) : size[1];
     if (
       Math.abs(width - (node.size?.[0] || 0)) > 1
       || Math.abs(height - (node.size?.[1] || 0)) > 1
@@ -149,6 +151,20 @@ function shouldShowPreview(node) {
   return !widget || widget.value !== false;
 }
 
+function cachedPreviewValues(node) {
+  return {
+    prompt: String(findWidget(node, "cached_prompt")?.value ?? ""),
+    negative: String(findWidget(node, "cached_negative_prompt")?.value ?? ""),
+    width: Number(findWidget(node, "cached_width")?.value ?? 0),
+    height: Number(findWidget(node, "cached_height")?.value ?? 0),
+  };
+}
+
+function hasCachedPreviewData(node) {
+  const cached = cachedPreviewValues(node);
+  return !!(cached.prompt || cached.negative || cached.width || cached.height);
+}
+
 function setPreviewVisible(node, visible) {
   const widget = findWidget(node, "easyuse_anima_preview");
   if (!widget) {
@@ -159,12 +175,18 @@ function setPreviewVisible(node, visible) {
 }
 
 function updatePreviewVisibility(node) {
-  if (shouldShowPreview(node)) {
-    ensurePreviewWidget(node);
-    updatePreviewFromWidgets(node);
-    setPreviewVisible(node, true);
-  } else {
+  if (!shouldShowPreview(node)) {
     setPreviewVisible(node, false);
+    return;
+  }
+
+  const preview = findWidget(node, "easyuse_anima_preview");
+  if (preview) {
+    setPreviewVisible(node, hasCachedPreviewData(node) || !!preview.value);
+  } else if (hasCachedPreviewData(node)) {
+    updatePreviewFromWidgets(node);
+  } else {
+    refreshNodeSize(node);
   }
 }
 
@@ -194,7 +216,7 @@ function ensurePreviewWidget(node) {
     app,
   ).widget;
   widget.serialize = false;
-  widget.__easyuseAnimaPreviewHeight = 220;
+  widget.__easyuseAnimaPreviewHeight = 160;
   widget.computeSize = function (width) {
     return [width, PREVIEW_MIN_HEIGHT];
   };
@@ -202,7 +224,7 @@ function ensurePreviewWidget(node) {
   widget.inputEl.style.opacity = 0.7;
   widget.inputEl.style.fontSize = "0.75rem";
   widget.inputEl.style.minHeight = `${PREVIEW_MIN_HEIGHT}px`;
-  widget.inputEl.style.height = "220px";
+  widget.inputEl.style.height = "160px";
   widget.inputEl.style.resize = "none";
   return widget;
 }
@@ -246,10 +268,7 @@ function updatePreview(node, message) {
 }
 
 function updatePreviewFromWidgets(node) {
-  const prompt = String(findWidget(node, "cached_prompt")?.value ?? "");
-  const negative = String(findWidget(node, "cached_negative_prompt")?.value ?? "");
-  const width = Number(findWidget(node, "cached_width")?.value ?? 0);
-  const height = Number(findWidget(node, "cached_height")?.value ?? 0);
+  const { prompt, negative, width, height } = cachedPreviewValues(node);
 
   if (!prompt && !negative && (!width || !height)) {
     return;
@@ -275,9 +294,6 @@ app.registerExtension({
       hideStorageWidgets(this);
       hookShowPreviewWidget(this);
       hideNaiaSettingsWidgets(this);
-      if (shouldShowPreview(this)) {
-        ensurePreviewWidget(this);
-      }
       updatePreviewVisibility(this);
       updatePreviewFromWidgets(this);
     };

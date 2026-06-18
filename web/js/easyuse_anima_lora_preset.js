@@ -531,7 +531,6 @@ function closeProfileMenu(node) {
   }
   state.menu.remove();
   document.removeEventListener("pointerdown", state.closeHandler, true);
-  window.removeEventListener("resize", state.closeHandler, true);
   node.__easyuseAnimaProfileMenu = null;
 }
 
@@ -540,6 +539,7 @@ function openProfileMenu(node, anchor) {
   const count = profileCount(node);
   const selected = activeProfileIndex(node);
   const rect = anchor.getBoundingClientRect();
+  const openedAt = Date.now();
   const menu = document.createElement("div");
   menu.style.position = "fixed";
   menu.style.left = `${rect.left}px`;
@@ -586,17 +586,20 @@ function openProfileMenu(node, anchor) {
   }
 
   const closeHandler = (event) => {
-    if (event.target === anchor || menu.contains(event.target)) {
+    if (Date.now() - openedAt < 160) {
+      return;
+    }
+    const path = typeof event.composedPath === "function" ? event.composedPath() : [];
+    if (event.target === anchor || menu.contains(event.target) || path.includes(anchor) || path.includes(menu)) {
       return;
     }
     closeProfileMenu(node);
   };
   document.body.appendChild(menu);
   node.__easyuseAnimaProfileMenu = { menu, closeHandler };
-  setTimeout(() => {
+  window.requestAnimationFrame(() => {
     document.addEventListener("pointerdown", closeHandler, true);
-    window.addEventListener("resize", closeHandler, true);
-  }, 0);
+  });
 }
 
 function renderTabs(node) {
