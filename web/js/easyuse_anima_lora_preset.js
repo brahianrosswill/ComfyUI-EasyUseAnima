@@ -496,230 +496,84 @@ function ensureLoraStackInput(node) {
   }
 }
 
-function styleTabsContainer(container) {
-  container.style.display = "flex";
-  container.style.flexWrap = "nowrap";
-  container.style.gap = "4px";
-  container.style.padding = "4px 0";
-  container.style.width = "100%";
-  container.style.minWidth = "0";
-  container.style.boxSizing = "border-box";
-  container.style.alignItems = "center";
-}
-
-function styleProfileButton(button, width = "28px") {
-  button.style.height = "26px";
-  button.style.width = width;
-  button.style.flex = `0 0 ${width}`;
-  button.style.border = "1px solid #555";
-  button.style.borderRadius = "4px";
-  button.style.background = "#252525";
-  button.style.color = "#d4d4d4";
-  button.style.cursor = "pointer";
-  button.style.fontSize = "12px";
-  button.style.padding = "0";
-}
-
-function stopCanvasEvent(event) {
-  event.stopPropagation();
-}
-
-function closeProfileMenu(node) {
-  const state = node.__easyuseAnimaProfileMenu;
-  if (!state) {
-    return;
-  }
-  state.menu.remove();
-  document.removeEventListener("pointerdown", state.closeHandler, true);
-  node.__easyuseAnimaProfileMenu = null;
-}
-
-function openProfileMenu(node, anchor) {
-  closeProfileMenu(node);
+function profileOptions(node) {
   const count = profileCount(node);
-  const selected = activeProfileIndex(node);
-  const rect = anchor.getBoundingClientRect();
-  const menu = document.createElement("div");
-  menu.style.position = "fixed";
-  menu.style.left = `${rect.left}px`;
-  menu.style.top = `${rect.bottom + 4}px`;
-  menu.style.width = `${Math.max(180, rect.width)}px`;
-  menu.style.maxHeight = "220px";
-  menu.style.overflowY = "auto";
-  menu.style.boxSizing = "border-box";
-  menu.style.padding = "4px";
-  menu.style.border = "1px solid #555";
-  menu.style.borderRadius = "4px";
-  menu.style.background = "#202020";
-  menu.style.boxShadow = "0 8px 22px rgba(0, 0, 0, 0.42)";
-  menu.style.zIndex = "10000";
-  menu.addEventListener("pointerdown", stopCanvasEvent);
-  menu.addEventListener("mousedown", stopCanvasEvent);
-  menu.addEventListener("click", stopCanvasEvent);
-
+  const options = [];
   for (let index = 1; index <= count; index += 1) {
-    const option = document.createElement("button");
-    option.type = "button";
-    option.textContent = `${index}. ${profileLabel(node, index)}`;
-    option.style.display = "block";
-    option.style.width = "100%";
-    option.style.height = "26px";
-    option.style.padding = "0 7px";
-    option.style.margin = "0";
-    option.style.border = "0";
-    option.style.borderRadius = "3px";
-    option.style.textAlign = "left";
-    option.style.overflow = "hidden";
-    option.style.textOverflow = "ellipsis";
-    option.style.whiteSpace = "nowrap";
-    option.style.background = index === selected ? "#2f6feb" : "transparent";
-    option.style.color = index === selected ? "#ffffff" : "#d4d4d4";
-    option.style.cursor = "pointer";
-    option.addEventListener("click", (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      closeProfileMenu(node);
-      switchProfile(node, index);
-    });
-    menu.appendChild(option);
+    options.push(`${index}. ${profileLabel(node, index)}`);
   }
+  return options;
+}
 
-  const closeHandler = (event) => {
-    const path = typeof event.composedPath === "function" ? event.composedPath() : [];
-    if (event.target === anchor || menu.contains(event.target) || path.includes(anchor) || path.includes(menu)) {
-      return;
-    }
-    closeProfileMenu(node);
-  };
-  document.body.appendChild(menu);
-  node.__easyuseAnimaProfileMenu = { menu, closeHandler };
-  document.addEventListener("pointerdown", closeHandler, true);
+function profileOptionIndex(value) {
+  const match = String(value || "").match(/^(\d+)\./);
+  return Math.max(1, Number.parseInt(match?.[1] || "1", 10) || 1);
 }
 
 function renderTabs(node) {
-  const container = node.__easyuseAnimaLoraPresetTabs;
-  if (!container) {
+  const selector = node.__easyuseAnimaProfileSelector;
+  if (!selector) {
     return;
   }
-  closeProfileMenu(node);
-  const count = profileCount(node);
-  const selected = activeProfileIndex(node);
-  container.replaceChildren();
-  styleTabsContainer(container);
-  container.addEventListener("pointerdown", stopCanvasEvent);
-  container.addEventListener("mousedown", stopCanvasEvent);
-  container.addEventListener("click", stopCanvasEvent);
-
-  const selector = document.createElement("button");
-  selector.type = "button";
-  selector.textContent = `${selected}. ${profileLabel(node, selected)}`;
-  selector.title = "Open profile selector. Double click: rename. Right click: delete.";
-  selector.style.flex = "1 1 auto";
-  selector.style.minWidth = "0";
-  selector.style.maxWidth = "100%";
-  selector.style.height = "26px";
-  selector.style.boxSizing = "border-box";
-  selector.style.background = "#252525";
-  selector.style.color = "#d4d4d4";
-  selector.style.border = "1px solid #555";
-  selector.style.borderRadius = "4px";
-  selector.style.padding = "0 22px 0 7px";
-  selector.style.fontSize = "12px";
-  selector.style.textAlign = "left";
-  selector.style.overflow = "hidden";
-  selector.style.textOverflow = "ellipsis";
-  selector.style.whiteSpace = "nowrap";
-  selector.style.cursor = "pointer";
-  selector.style.position = "relative";
-  selector.addEventListener("click", (event) => {
-    event.preventDefault();
-    event.stopPropagation();
-    if (node.__easyuseAnimaProfileMenu) {
-      closeProfileMenu(node);
-    } else {
-      openProfileMenu(node, selector);
-    }
-  });
-  selector.addEventListener("dblclick", (event) => {
-    event.preventDefault();
-    event.stopPropagation();
-    closeProfileMenu(node);
-    renameProfile(node, activeProfileIndex(node));
-  });
-  selector.addEventListener("contextmenu", (event) => {
-    event.preventDefault();
-    event.stopPropagation();
-    closeProfileMenu(node);
-    deleteProfile(node, activeProfileIndex(node));
-  });
-  const arrow = document.createElement("span");
-  arrow.textContent = "▾";
-  arrow.style.position = "absolute";
-  arrow.style.right = "7px";
-  arrow.style.top = "3px";
-  arrow.style.pointerEvents = "none";
-  selector.appendChild(arrow);
-  container.appendChild(selector);
-
-  if (count < MAX_PROFILES) {
-    const addButton = document.createElement("button");
-    addButton.type = "button";
-    addButton.textContent = "+";
-    addButton.title = "Add profile";
-    styleProfileButton(addButton);
-    addButton.addEventListener("click", (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      addProfile(node);
-    });
-    container.appendChild(addButton);
+  const options = profileOptions(node);
+  selector.options.values = options;
+  const selectedLabel = options[activeProfileIndex(node) - 1] || options[0] || defaultProfileName(1);
+  node.__easyuseAnimaSuppressProfileSelectorCallback = true;
+  try {
+    selector.value = selectedLabel;
+  } finally {
+    node.__easyuseAnimaSuppressProfileSelectorCallback = false;
   }
-
-  const renameButton = document.createElement("button");
-  renameButton.type = "button";
-  renameButton.textContent = "R";
-  renameButton.title = "Rename selected profile";
-  styleProfileButton(renameButton);
-  renameButton.addEventListener("click", (event) => {
-    event.preventDefault();
-    event.stopPropagation();
-    renameProfile(node, activeProfileIndex(node));
-  });
-  container.appendChild(renameButton);
-
-  const deleteButton = document.createElement("button");
-  deleteButton.type = "button";
-  deleteButton.textContent = "X";
-  deleteButton.title = "Delete selected profile";
-  styleProfileButton(deleteButton);
-  deleteButton.disabled = count <= 1;
-  if (deleteButton.disabled) {
-    deleteButton.style.opacity = "0.45";
-    deleteButton.style.cursor = "not-allowed";
+  const deleteButton = node.__easyuseAnimaDeleteProfileButton;
+  if (deleteButton) {
+    deleteButton.disabled = profileCount(node) <= 1;
   }
-  deleteButton.addEventListener("click", (event) => {
-    event.preventDefault();
-    event.stopPropagation();
-    deleteProfile(node, activeProfileIndex(node));
-  });
-  container.appendChild(deleteButton);
   enforceNodeLayout(node);
 }
 
 function ensureTabsWidget(node) {
-  if (node.__easyuseAnimaLoraPresetTabs || typeof node.addDOMWidget !== "function") {
+  if (node.__easyuseAnimaProfileSelector || typeof node.addWidget !== "function") {
     return;
   }
-  const container = document.createElement("div");
-  node.__easyuseAnimaLoraPresetTabs = container;
-  const tabsWidget = node.addDOMWidget("profile_tabs", "EASYUSE_ANIMA_LORA_PROFILE_TABS", container, {
-    serialize: false,
-    getMinHeight() {
-      return 36;
+  const selector = node.addWidget(
+    "combo",
+    "profile",
+    profileOptions(node)[activeProfileIndex(node) - 1] || defaultProfileName(1),
+    (value) => {
+      if (node.__easyuseAnimaSuppressProfileSelectorCallback) {
+        return;
+      }
+      switchProfile(node, profileOptionIndex(value));
     },
+    { values: profileOptions(node) },
+  );
+  selector.serialize = false;
+  node.__easyuseAnimaProfileSelector = selector;
+
+  const addButton = node.addWidget("button", "add_profile", "+", () => addProfile(node));
+  addButton.serialize = false;
+
+  const renameButton = node.addWidget("button", "rename_profile", "Rename", () => {
+    renameProfile(node, activeProfileIndex(node));
   });
-  if (tabsWidget) {
-    tabsWidget.serialize = false;
+  renameButton.serialize = false;
+
+  const deleteButton = node.addWidget("button", "delete_profile", "Delete", () => {
+    deleteProfile(node, activeProfileIndex(node));
+  });
+  deleteButton.serialize = false;
+  node.__easyuseAnimaDeleteProfileButton = deleteButton;
+
+  for (const widget of [selector, addButton, renameButton, deleteButton]) {
+    if (widget) {
+      widget.__easyuseAnimaControlWidget = true;
+    }
+  }
+  const controls = [selector, addButton, renameButton, deleteButton].filter(Boolean);
+  const lorasIndex = node.widgets?.findIndex((widget) => widget.name === "loras") ?? -1;
+  if (lorasIndex >= 0 && controls.length) {
+    node.widgets = node.widgets.filter((widget) => !widget.__easyuseAnimaControlWidget);
+    node.widgets.splice(lorasIndex, 0, ...controls);
   }
   renderTabs(node);
 }
