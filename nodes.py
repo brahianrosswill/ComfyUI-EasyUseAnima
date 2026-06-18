@@ -702,11 +702,11 @@ class EasyUseAnimaLoraPreset:
                     "tooltip": "Number of saved profiles shown in the front-end tab bar.",
                 }),
                 "lora_name": (_lora_combo_values(), {
-                    "tooltip": "Internal LoRA selector used by the EasyUse Anima front-end.",
+                    "tooltip": "Select a LoRA file to add it to the current preset profile.",
                 }),
                 "loras": ("LORAS", {
                     "default": [],
-                    "tooltip": "LoRAManager-compatible LoRA list widget when LoraManager is installed.",
+                    "tooltip": "Internal serialized LoRA rows used by the EasyUse Anima front-end.",
                 }),
                 "profile_data": ("STRING", {
                     "multiline": True,

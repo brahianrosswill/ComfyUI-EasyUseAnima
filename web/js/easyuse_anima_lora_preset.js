@@ -13,19 +13,19 @@ const WIDGET_INDEX = {
 const MIN_NODE_WIDTH = 460;
 const LORA_ROW_HEIGHT = 28;
 const LORA_STRENGTH_STEP = 0.05;
-let loraManagerModulesPromise = null;
+const LORA_HEADER_HEIGHT = 30;
+let rgthreeInfoDialogPromise = null;
 
-async function loadLoraManagerModules() {
-  if (!loraManagerModulesPromise) {
-    loraManagerModulesPromise = import("../../comfyui-lora-manager/preview_tooltip.js")
-      .then((previewModule) => ({
-        PreviewTooltip: previewModule.PreviewTooltip,
-      })).catch((error) => {
-      console.warn("EasyUse Anima: LoraManager UI is unavailable.", error);
-      return null;
-    });
+async function loadRgthreeInfoDialog() {
+  if (!rgthreeInfoDialogPromise) {
+    rgthreeInfoDialogPromise = import("../../rgthree-comfy/comfyui/dialog_info.js")
+      .then((module) => module.RgthreeLoraInfoDialog)
+      .catch((error) => {
+        console.warn("EasyUse Anima: rgthree LoRA info dialog is unavailable.", error);
+        return null;
+      });
   }
-  return loraManagerModulesPromise;
+  return rgthreeInfoDialogPromise;
 }
 
 function findWidget(node, name) {
@@ -381,7 +381,6 @@ function detachInternalWidget(node, name) {
 function finalizeInternalWidgets(node) {
   detachInternalWidget(node, "profile_data");
   detachInternalWidget(node, "profile_count");
-  detachInternalWidget(node, "lora_name");
   detachInternalWidget(node, "loras");
 }
 
@@ -458,23 +457,6 @@ function removeLoraEntry(node, index) {
   });
 }
 
-function comboValues(widget) {
-  const raw = widget?.options?.values || widget?.values || widget?.inputSpec?.[0] || [];
-  if (Array.isArray(raw)) {
-    return raw;
-  }
-  if (raw && typeof raw === "object") {
-    return Object.keys(raw);
-  }
-  return [];
-}
-
-function loraNameValues(node) {
-  return comboValues(findWidget(node, "lora_name"))
-    .map((value) => String(value || "").trim())
-    .filter((value) => value && value !== "None");
-}
-
 function loraEntryFromName(name, base = {}) {
   const modelStrength = Number.isFinite(Number(base.strength)) ? Number(base.strength) : 1;
   const clipStrength = Number.isFinite(Number(base.clipStrength)) ? Number(base.clipStrength) : modelStrength;
@@ -486,57 +468,23 @@ function loraEntryFromName(name, base = {}) {
   };
 }
 
-function menuEvent(event) {
-  if (event instanceof Event) {
-    return event;
-  }
-  const mouse = app.canvas?.last_mouse;
-  return app.canvas?.last_mouse_event || new MouseEvent("click", {
-    clientX: Array.isArray(mouse) ? mouse[0] : window.innerWidth / 2,
-    clientY: Array.isArray(mouse) ? mouse[1] : window.innerHeight / 2,
-  });
-}
-
-function openLoraMenu(node, event, onChoose) {
-  const values = loraNameValues(node);
-  if (!values.length) {
-    window.alert("No LoRA files found. Refresh ComfyUI after adding LoRAs.");
+function handleLoraNameSelected(node, value) {
+  if (node.__easyuseAnimaLoadingProfile || node.__easyuseAnimaSuppressLoraNameCallback) {
     return;
   }
-  const canvas = app.canvas;
-  new LiteGraph.ContextMenu(values, {
-    event: menuEvent(event),
-    title: "Choose a LoRA",
-    scale: Math.max(1, Number(canvas?.ds?.scale) || 1),
-    className: "dark",
-    callback: (value) => {
-      const name = String(value?.content ?? value ?? "").trim();
-      if (!name) {
-        return;
-      }
-      setWidgetValue(findWidget(node, "lora_name"), name);
-      onChoose(loraEntryFromName(name));
-    },
-  });
-}
-
-async function showLoraPreview(node, name, event) {
-  const modules = await loadLoraManagerModules();
-  if (!modules?.PreviewTooltip || !name) {
+  const name = String(value || "").trim();
+  if (!name || name === "None") {
     return;
   }
-  if (!node.__easyuseAnimaLoraPreviewTooltip) {
-    node.__easyuseAnimaLoraPreviewTooltip = new modules.PreviewTooltip({ modelType: "loras" });
-  }
-  const x = Number(event?.clientX || window.innerWidth / 2) + 18;
-  const y = Number(event?.clientY || window.innerHeight / 2) + 18;
-  node.__easyuseAnimaLoraPreviewTooltip.show(name, x, y, true);
-  node.__easyuseAnimaLoraPreviewName = name;
+  addLoraEntry(node, loraEntryFromName(name));
 }
 
-function hideLoraPreview(node) {
-  node.__easyuseAnimaLoraPreviewTooltip?.hide?.();
-  node.__easyuseAnimaLoraPreviewName = null;
+async function showLoraInfo(name) {
+  const InfoDialog = await loadRgthreeInfoDialog();
+  if (!InfoDialog || !name || name === "None") {
+    return;
+  }
+  new InfoDialog(name).show();
 }
 
 function fitCanvasText(ctx, text, maxWidth) {
@@ -653,16 +601,6 @@ class EasyUseAnimaLoraRowWidget {
     if (!lora) {
       return false;
     }
-    if (event.type === "pointermove") {
-      if (this.contains(pos, "preview")) {
-        showLoraPreview(node, lora.name, event);
-        return true;
-      }
-      if (node.__easyuseAnimaLoraPreviewName === lora.name) {
-        hideLoraPreview(node);
-      }
-      return false;
-    }
     if (event.type !== "pointerdown") {
       return false;
     }
@@ -675,7 +613,7 @@ class EasyUseAnimaLoraRowWidget {
       return true;
     }
     if (this.contains(pos, "preview")) {
-      showLoraPreview(node, lora.name, event);
+      showLoraInfo(lora.name);
       return true;
     }
     if (this.contains(pos, "dec")) {
@@ -695,13 +633,76 @@ class EasyUseAnimaLoraRowWidget {
       }, event);
       return true;
     }
-    if (this.contains(pos, "name")) {
-      openLoraMenu(node, event, (entry) => {
-        updateLoraEntry(node, this.index, loraEntryFromName(entry.name, lora));
-      });
-      return true;
-    }
     return false;
+  }
+}
+
+class EasyUseAnimaLoraHeaderWidget {
+  constructor() {
+    this.name = "easyuse_anima_lora_header";
+    this.type = "custom";
+    this.options = { serialize: false };
+    this.serialize = false;
+    this.__easyuseAnimaLoraRowWidget = true;
+    this.hitAreas = {};
+  }
+
+  computeSize(width) {
+    return [width, LORA_HEADER_HEIGHT];
+  }
+
+  draw(ctx, node, width, y, height) {
+    const margin = 10;
+    const rowX = margin;
+    const rowW = width - margin * 2;
+    const midY = y + height / 2;
+    const toggleSize = 18;
+    this.hitAreas.toggleAll = [rowX, y + 6, toggleSize, toggleSize];
+
+    const loras = lorasWidgetValue(node);
+    const allActive = loras.length > 0 && loras.every((lora) => lora.active !== false);
+
+    ctx.save();
+    ctx.fillStyle = "rgba(46, 51, 62, 0.78)";
+    ctx.beginPath();
+    roundedRect(ctx, rowX, y + 2, rowW, height - 4, 5);
+    ctx.fill();
+
+    ctx.fillStyle = allActive ? "#4aa3df" : "#555";
+    ctx.beginPath();
+    roundedRect(ctx, ...this.hitAreas.toggleAll, 4);
+    ctx.fill();
+
+    ctx.fillStyle = LiteGraph.WIDGET_TEXT_COLOR;
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+    ctx.fillText("Toggle All", rowX + toggleSize + 12, midY);
+    ctx.textAlign = "right";
+    ctx.fillText("Strength ↔", width - margin * 2, midY);
+    ctx.restore();
+  }
+
+  contains(pos, area) {
+    const hit = this.hitAreas[area];
+    return !!hit
+      && pos[0] >= hit[0]
+      && pos[0] <= hit[0] + hit[2]
+      && pos[1] >= hit[1]
+      && pos[1] <= hit[1] + hit[3];
+  }
+
+  mouse(event, pos, node) {
+    if (event.type !== "pointerdown" || !this.contains(pos, "toggleAll")) {
+      return false;
+    }
+    const loras = lorasWidgetValue(node);
+    const nextActive = !(loras.length > 0 && loras.every((lora) => lora.active !== false));
+    mutateLoras(node, (items) => {
+      for (const item of items) {
+        item.active = nextActive;
+      }
+    });
+    return true;
   }
 }
 
@@ -710,11 +711,14 @@ function renderLoraRows(node) {
     return;
   }
   node.widgets = node.widgets.filter((widget) => !widget.__easyuseAnimaLoraRowWidget);
-  const addButton = node.__easyuseAnimaAddLoraButton;
-  const addIndex = addButton ? node.widgets.indexOf(addButton) : -1;
-  const rows = lorasWidgetValue(node).map((_, index) => new EasyUseAnimaLoraRowWidget(index));
-  if (addIndex >= 0) {
-    node.widgets.splice(addIndex, 0, ...rows);
+  const loraNameWidget = findWidget(node, "lora_name");
+  const loraNameIndex = loraNameWidget ? node.widgets.indexOf(loraNameWidget) : -1;
+  const loras = lorasWidgetValue(node);
+  const rows = loras.length
+    ? [new EasyUseAnimaLoraHeaderWidget(), ...loras.map((_, index) => new EasyUseAnimaLoraRowWidget(index))]
+    : [];
+  if (loraNameIndex >= 0) {
+    node.widgets.splice(loraNameIndex + 1, 0, ...rows);
   } else {
     node.widgets.push(...rows);
   }
@@ -800,11 +804,6 @@ function ensureTabsWidget(node) {
     node.widgets = node.widgets.filter((widget) => !widget.__easyuseAnimaControlWidget);
     node.widgets.splice(insertBeforeIndex, 0, ...controls);
   }
-  const addLoraButton = node.addWidget("button", "add_lora", "Add LoRA", (event) => {
-    openLoraMenu(node, event, (entry) => addLoraEntry(node, entry));
-  });
-  addLoraButton.serialize = false;
-  node.__easyuseAnimaAddLoraButton = addLoraButton;
   renderTabs(node);
   renderLoraRows(node);
 }
@@ -844,6 +843,9 @@ function initializeNode(node) {
   enforceNodeLayout(node);
 
   wrapWidgetCallback(node, "style_prompt", () => syncAfterWidgetChange(node));
+  wrapWidgetCallback(node, "lora_name", function () {
+    handleLoraNameSelected(node, widgetValue(findWidget(node, "lora_name"), ""));
+  });
   wrapWidgetCallback(node, "loras", () => syncAfterWidgetChange(node));
   wrapWidgetCallback(node, "profile_count", () => {
     if (node.__easyuseAnimaSuppressProfileCountCallback) {
