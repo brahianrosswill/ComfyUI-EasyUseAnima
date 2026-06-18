@@ -583,7 +583,7 @@ function enforceNodeLayout(node) {
   const currentWidth = Number(node.size[0]) || 0;
   const currentHeight = Number(node.size[1]) || 0;
   const computed = typeof node.computeSize === "function" ? node.computeSize() : null;
-  const nextWidth = Math.max(MIN_NODE_WIDTH, currentWidth);
+  const nextWidth = currentWidth || MIN_NODE_WIDTH;
   const nextHeight = Math.max(120, Number(computed?.[1]) || currentHeight);
   if (nextWidth !== currentWidth || nextHeight !== currentHeight) {
     node.setSize([nextWidth, nextHeight]);
