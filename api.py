@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import json
 import os
+import re
+from pathlib import Path
 
 try:
     import server
@@ -25,6 +28,114 @@ from .autocomplete_dataset import (
 
 
 LORA_PREVIEW_EXTENSIONS = (".webp", ".png", ".jpg", ".jpeg")
+PACKAGE_DATA_DIR = Path(__file__).resolve().parent / "__easyuse_anima__"
+LORA_PROFILE_DIR = PACKAGE_DATA_DIR / "profiles"
+MAX_LORA_PROFILES = 16
+INVALID_PROFILE_NAME_CHARS = re.compile(r'[<>:"/\\|?*\x00-\x1f]+')
+
+
+def _sanitize_lora_profile_name(name: str) -> str:
+    safe_name = INVALID_PROFILE_NAME_CHARS.sub("_", str(name or "")).strip(" ._")
+    if not safe_name:
+        raise ValueError("Profile name is required")
+    return safe_name[:80]
+
+
+def _lora_profile_path(name: str) -> Path:
+    safe_name = _sanitize_lora_profile_name(name)
+    profile_dir = LORA_PROFILE_DIR.resolve()
+    path = (profile_dir / f"{safe_name}.json").resolve()
+    if os.path.commonpath((str(profile_dir), str(path))) != str(profile_dir):
+        raise ValueError("Invalid profile path")
+    return path
+
+
+def _as_lora_profile_count(value) -> int:
+    try:
+        count = int(value)
+    except (TypeError, ValueError):
+        count = 1
+    return max(1, min(MAX_LORA_PROFILES, count))
+
+
+def _as_lora_profile_index(value, count: int) -> int:
+    try:
+        index = int(value)
+    except (TypeError, ValueError):
+        index = 1
+    index = max(1, index)
+    return ((index - 1) % count) + 1
+
+
+def _normalize_lora_profile_data(value) -> dict:
+    if isinstance(value, str):
+        try:
+            value = json.loads(value or "{}")
+        except (TypeError, ValueError):
+            value = {}
+    if not isinstance(value, dict):
+        return {}
+    normalized: dict[str, dict] = {}
+    for key, profile in value.items():
+        if not isinstance(profile, dict):
+            continue
+        style_prompt = str(profile.get("style_prompt") or "")
+        loras = profile.get("loras")
+        if not isinstance(loras, list):
+            loras = []
+        normalized[str(key)] = {
+            "style_prompt": style_prompt,
+            "loras": [item for item in loras if isinstance(item, dict)],
+        }
+    return normalized
+
+
+def _normalize_lora_profile_payload(data: dict) -> dict:
+    count = _as_lora_profile_count(data.get("profile_count", 1))
+    return {
+        "version": 1,
+        "profile_count": count,
+        "profile_index": _as_lora_profile_index(data.get("profile_index", 1), count),
+        "profile_data": _normalize_lora_profile_data(data.get("profile_data", {})),
+    }
+
+
+def _list_lora_profiles() -> list[dict]:
+    if not LORA_PROFILE_DIR.is_dir():
+        return []
+    profiles = []
+    for path in sorted(LORA_PROFILE_DIR.glob("*.json"), key=lambda item: item.stem.lower()):
+        if path.name == ".gitignore":
+            continue
+        profiles.append(
+            {
+                "name": path.stem,
+                "modified": int(path.stat().st_mtime),
+            }
+        )
+    return profiles
+
+
+def _save_lora_profile(name: str, data: dict) -> dict:
+    safe_name = _sanitize_lora_profile_name(name)
+    payload = _normalize_lora_profile_payload(data)
+    payload["name"] = safe_name
+    LORA_PROFILE_DIR.mkdir(parents=True, exist_ok=True)
+    path = _lora_profile_path(safe_name)
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    return payload
+
+
+def _load_lora_profile(name: str) -> dict:
+    path = _lora_profile_path(name)
+    if not path.is_file():
+        raise FileNotFoundError("Profile not found")
+    data = json.loads(path.read_text(encoding="utf-8") or "{}")
+    if not isinstance(data, dict):
+        data = {}
+    payload = _normalize_lora_profile_payload(data)
+    payload["name"] = path.stem
+    return payload
 
 
 def _resolve_lora_preview_path(lora_name: str):
@@ -134,3 +245,26 @@ if server is not None and web is not None:
             preview_path,
             headers={"Content-Disposition": f'filename="{os.path.basename(preview_path)}"'},
         )
+
+    @server.PromptServer.instance.routes.get("/easyuse_anima/lora_profiles")
+    async def lora_profiles_handler(request):
+        return web.json_response({"profiles": _list_lora_profiles()})
+
+    @server.PromptServer.instance.routes.post("/easyuse_anima/lora_profiles/save")
+    async def save_lora_profile_handler(request):
+        data = await request.json()
+        try:
+            payload = _save_lora_profile(str(data.get("name") or ""), data)
+        except ValueError as exc:
+            return web.json_response({"status": "error", "message": str(exc)}, status=400)
+        return web.json_response({"status": "ok", "profile": payload})
+
+    @server.PromptServer.instance.routes.get("/easyuse_anima/lora_profiles/load")
+    async def load_lora_profile_handler(request):
+        try:
+            payload = _load_lora_profile(request.query.get("name", ""))
+        except ValueError as exc:
+            return web.json_response({"status": "error", "message": str(exc)}, status=400)
+        except FileNotFoundError as exc:
+            return web.json_response({"status": "error", "message": str(exc)}, status=404)
+        return web.json_response({"status": "ok", "profile": payload})

@@ -100,6 +100,20 @@ async function loadLoraPresetSettings() {
   }
 }
 
+async function fetchJson(url, options = {}) {
+  const response = await fetch(url, options);
+  let data = null;
+  try {
+    data = await response.json();
+  } catch {
+    data = null;
+  }
+  if (!response.ok) {
+    throw new Error(data?.message || response.statusText || "Request failed");
+  }
+  return data;
+}
+
 function firstValue(value, fallback = null) {
   if (Array.isArray(value)) {
     return value.length ? value[0] : fallback;
@@ -163,8 +177,12 @@ function profileKey(index) {
 }
 
 function parseProfileData(widget) {
+  return normalizeProfileDataValue(widgetValue(widget, "{}"));
+}
+
+function normalizeProfileDataValue(value) {
   try {
-    const parsed = JSON.parse(String(widgetValue(widget, "{}") || "{}"));
+    const parsed = typeof value === "string" ? JSON.parse(String(value || "{}")) : value;
     return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
   } catch {
     return {};
@@ -258,19 +276,9 @@ function setLorasWidgetValue(node, loras, options = {}) {
 
 function currentProfile(node) {
   return {
-    name: profileLabel(node, activeProfileIndex(node)),
     style_prompt: String(widgetValue(findWidget(node, "style_prompt"), "")),
     loras: lorasWidgetValue(node).map(normalizeLoraEntry).filter((entry) => entry.name),
   };
-}
-
-function defaultProfileName(index) {
-  return `Profile ${index}`;
-}
-
-function profileLabel(node, index) {
-  const profile = parseProfileData(findWidget(node, "profile_data"))[profileKey(index)];
-  return String(profile?.name || defaultProfileName(index));
 }
 
 function saveProfile(node, index) {
@@ -283,11 +291,7 @@ function saveProfile(node, index) {
   }
   const data = parseProfileData(dataWidget);
   const key = profileKey(index);
-  const previous = data[key] && typeof data[key] === "object" ? data[key] : {};
-  data[key] = {
-    ...currentProfile(node),
-    name: String(previous.name || currentProfile(node).name || defaultProfileName(index)),
-  };
+  data[key] = currentProfile(node);
   writeProfileData(dataWidget, data);
 }
 
@@ -297,7 +301,6 @@ function saveCurrentProfile(node) {
 
 function emptyProfile(index = 1) {
   return {
-    name: defaultProfileName(index),
     style_prompt: "",
     loras: [],
   };
@@ -312,7 +315,6 @@ function loadProfile(node, index, options = {}) {
   const key = profileKey(index);
   if (!Object.prototype.hasOwnProperty.call(data, key)) {
     data[key] = options.initializeFromCurrent ? currentProfile(node) : emptyProfile(index);
-    data[key].name = String(data[key].name || defaultProfileName(index));
     writeProfileData(dataWidget, data);
   }
   const profile = data[key] || emptyProfile(index);
@@ -355,31 +357,12 @@ function addProfile(node) {
   switchProfile(node, nextIndex);
 }
 
-function renameProfile(node, index) {
-  saveCurrentProfile(node);
-  const dataWidget = findWidget(node, "profile_data");
-  const data = parseProfileData(dataWidget);
-  const key = profileKey(index);
-  const currentName = String(data[key]?.name || defaultProfileName(index));
-  const nextName = window.prompt("Profile name", currentName);
-  if (nextName == null) {
-    return;
-  }
-  data[key] = {
-    ...(data[key] && typeof data[key] === "object" ? data[key] : emptyProfile(index)),
-    name: nextName.trim() || defaultProfileName(index),
-  };
-  writeProfileData(dataWidget, data);
-  renderProfileBar(node);
-  node.setDirtyCanvas?.(true, true);
-}
-
 function deleteProfile(node, index) {
   const count = profileCount(node);
   if (count <= 1) {
     return;
   }
-  if (!window.confirm(`Delete profile "${profileLabel(node, index)}"?`)) {
+  if (!window.confirm(`Delete profile ${index}?`)) {
     return;
   }
   const data = parseProfileData(findWidget(node, "profile_data"));
@@ -390,7 +373,6 @@ function deleteProfile(node, index) {
       continue;
     }
     nextData[profileKey(nextWriteIndex)] = data[profileKey(sourceIndex)] || emptyProfile(nextWriteIndex);
-    nextData[profileKey(nextWriteIndex)].name ||= defaultProfileName(nextWriteIndex);
     nextWriteIndex += 1;
   }
   writeProfileData(findWidget(node, "profile_data"), nextData);
@@ -401,6 +383,92 @@ function deleteProfile(node, index) {
   loadProfile(node, nextActive);
   renderProfileBar(node);
   node.setDirtyCanvas?.(true, true);
+}
+
+function profilePayload(node) {
+  saveCurrentProfile(node);
+  return {
+    profile_count: profileCount(node),
+    profile_index: activeProfileIndex(node),
+    profile_data: parseProfileData(findWidget(node, "profile_data")),
+  };
+}
+
+function applyProfilePayload(node, payload) {
+  const profile = payload?.profile || payload || {};
+  const count = Math.max(1, Math.min(MAX_PROFILES, Number.parseInt(profile.profile_count, 10) || 1));
+  const data = normalizeProfileDataValue(profile.profile_data);
+  const index = wrapProfileIndex(profile.profile_index || 1, count);
+  setProfileCount(node, count);
+  writeProfileData(findWidget(node, "profile_data"), data);
+  setProfileIndex(node, index);
+  node.__easyuseAnimaActiveProfileIndex = index;
+  loadProfile(node, index);
+  renderProfileBar(node);
+  renderLoraWidgets(node);
+  node.setDirtyCanvas?.(true, true);
+}
+
+async function saveProfileSet(node) {
+  const name = window.prompt("Save LoRA profile set as");
+  if (name == null) {
+    return;
+  }
+  const trimmedName = name.trim();
+  if (!trimmedName) {
+    window.alert("Profile name is required.");
+    return;
+  }
+  try {
+    await fetchJson("/easyuse_anima/lora_profiles/save", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: trimmedName,
+        ...profilePayload(node),
+      }),
+    });
+  } catch (error) {
+    window.alert(`Failed to save profile: ${error.message || error}`);
+  }
+}
+
+async function loadProfileSet(node, name) {
+  try {
+    const data = await fetchJson(`/easyuse_anima/lora_profiles/load?name=${encodeRFC3986URIComponent(name)}`);
+    applyProfilePayload(node, data.profile);
+  } catch (error) {
+    window.alert(`Failed to load profile: ${error.message || error}`);
+  }
+}
+
+async function openProfileLoadMenu(node, event, pos) {
+  let profiles = [];
+  try {
+    const data = await fetchJson("/easyuse_anima/lora_profiles");
+    profiles = Array.isArray(data?.profiles) ? data.profiles : [];
+  } catch (error) {
+    window.alert(`Failed to list profiles: ${error.message || error}`);
+    return;
+  }
+  if (!profiles.length) {
+    window.alert("No saved LoRA profiles found.");
+    return;
+  }
+  const values = profiles.map((profile) => String(profile.name || "")).filter(Boolean);
+  const clientPoint = menuClientPoint(node, pos, event);
+  new LiteGraph.ContextMenu(values, {
+    event: makeMenuEvent(clientPoint),
+    title: "Load Profile",
+    scale: Math.max(1, Number(app.canvas?.ds?.scale) || 1),
+    className: "dark",
+    callback: (value) => {
+      const name = String(value?.content ?? value ?? "").trim();
+      if (name) {
+        loadProfileSet(node, name);
+      }
+    },
+  });
 }
 
 function comboValues(widget) {
@@ -898,8 +966,9 @@ class ProfileBarWidget {
       drawButton(`profile:${index}`, String(index), 26, index === active);
     }
     drawButton("add", "+", 28);
-    drawButton("rename", "R", 28);
     drawButton("delete", "X", 28, false, count <= 1);
+    drawButton("save", "Save", 44);
+    drawButton("load", "Load", 44);
     ctx.restore();
   }
 
@@ -913,10 +982,12 @@ class ProfileBarWidget {
       }
       if (id === "add") {
         addProfile(node);
-      } else if (id === "rename") {
-        renameProfile(node, activeProfileIndex(node));
       } else if (id === "delete") {
         deleteProfile(node, activeProfileIndex(node));
+      } else if (id === "save") {
+        saveProfileSet(node);
+      } else if (id === "load") {
+        openProfileLoadMenu(node, event, pos);
       } else if (String(id).startsWith("profile:")) {
         switchProfile(node, Number.parseInt(String(id).slice(8), 10));
       }

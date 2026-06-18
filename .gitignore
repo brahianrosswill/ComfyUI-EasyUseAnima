@@ -14,3 +14,6 @@ __easyuse_anima__/*
 !__easyuse_anima__/.gitkeep
 !__easyuse_anima__/KR_danbooru_tags_with_description v3_modified.csv
 !__easyuse_anima__/danbooru_tags_classified.csv
+!__easyuse_anima__/profiles/
+__easyuse_anima__/profiles/*
+!__easyuse_anima__/profiles/.gitignore
