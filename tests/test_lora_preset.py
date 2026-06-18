@@ -11,14 +11,12 @@ class LoraPresetTests(unittest.TestCase):
         profile_data = json.dumps({
             "1": {
                 "style_prompt": "@profile_one",
-                "text": "",
                 "loras": [
                     {"name": "profile_one_lora", "strength": 0.4, "clipStrength": 0.4, "active": True}
                 ],
             },
             "2": {
                 "style_prompt": "@profile_two",
-                "text": "",
                 "loras": [
                     {"name": "profile_two_lora", "strength": 0.7, "clipStrength": 0.5, "active": True}
                 ],
@@ -33,7 +31,7 @@ class LoraPresetTests(unittest.TestCase):
                 style_prompt="@visible",
                 profile_index=2,
                 profile_count=4,
-                text="",
+                lora_name="None",
                 loras=[],
                 profile_data=profile_data,
             )
@@ -46,7 +44,7 @@ class LoraPresetTests(unittest.TestCase):
             2,
         ))
 
-    def test_lora_preset_parses_text_lora_when_profile_has_no_loras(self):
+    def test_lora_preset_uses_loras_widget_when_profile_has_no_loras(self):
         with (
             patch("nodes._get_lora_info", lambda name: (f"loras/{name}.safetensors", [])),
             patch("nodes._apply_lora_syntax_format", lambda name: name),
@@ -55,8 +53,8 @@ class LoraPresetTests(unittest.TestCase):
                 style_prompt="@artist",
                 profile_index=1,
                 profile_count=4,
-                text="< lora : test_lora : 1.2 >",
-                loras=[],
+                lora_name="None",
+                loras=[{"name": "test_lora", "strength": 1.2, "clipStrength": 1.2, "active": True}],
                 profile_data="{}",
             )
 
@@ -70,13 +68,11 @@ class LoraPresetTests(unittest.TestCase):
             "1": {
                 "name": "First",
                 "style_prompt": "@profile_one",
-                "text": "",
                 "loras": [],
             },
             "2": {
                 "name": "Second",
                 "style_prompt": "@profile_two",
-                "text": "",
                 "loras": [],
             },
         })
@@ -85,7 +81,7 @@ class LoraPresetTests(unittest.TestCase):
             style_prompt="@visible",
             profile_index=9,
             profile_count=2,
-            text="",
+            lora_name="None",
             loras=[],
             profile_data=profile_data,
         )

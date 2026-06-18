@@ -56,12 +56,6 @@ _HASH_COMMENT_RE = re.compile(r"^[ \t]*#[^\n]*", re.MULTILINE)
 _MULTI_COMMA_RE = re.compile(r"(\s*,){2,}")
 _INLINE_SPACE_RE = re.compile(r"[ \t]+")
 _WEIGHTED_TOKEN_RE = re.compile(r"^\(([^(),]+):[-+]?\d+(?:\.\d+)?\)$")
-_LORA_TAG_RE = re.compile(
-    r"<\s*lora\s*:\s*([^:>]+?)\s*:\s*([-+]?\d*\.?\d+)(?:\s*:\s*([-+]?\d*\.?\d+))?\s*>",
-    re.IGNORECASE,
-)
-
-
 class _AnyType(str):
     def __ne__(self, __value: object) -> bool:
         return False
@@ -328,27 +322,14 @@ def _get_loras_list(kwargs: dict) -> list[dict]:
     return [item for item in loras_data if isinstance(item, dict)]
 
 
-def _parse_lora_text(text: str) -> list[dict]:
-    loras: list[dict] = []
-    for match in _LORA_TAG_RE.finditer(str(text or "")):
-        model_strength = float(match.group(2))
-        clip_strength = float(match.group(3)) if match.group(3) is not None else model_strength
-        loras.append({
-            "name": match.group(1).strip(),
-            "strength": model_strength,
-            "clipStrength": clip_strength,
-            "active": True,
-        })
-    return loras
-
-
 def _apply_lora_syntax_format(name: str) -> str:
     try:
         from py.nodes.utils import apply_lora_syntax_format  # type: ignore
 
         return str(apply_lora_syntax_format(name))
     except Exception:
-        return str(name).replace("\\", "/").rstrip("/").split("/")[-1]
+        base_name = str(name).replace("\\", "/").rstrip("/").split("/")[-1]
+        return os.path.splitext(base_name)[0]
 
 
 def _fallback_lora_path(lora_name: str) -> str:
@@ -391,21 +372,27 @@ def _select_profile_values(
     profile_count: int,
     profile_data: str,
     style_prompt: str,
-    text: str,
     kwargs: dict,
-) -> tuple[str, str, list[dict], int]:
+) -> tuple[str, list[dict], int]:
     selected_index = _wrap_profile_index(profile_index, profile_count)
     profile = _load_profile_data(profile_data).get(_profile_key(selected_index), {})
     selected_style = str(profile.get("style_prompt", style_prompt or ""))
-    selected_text = str(profile.get("text", text or ""))
     profile_loras = profile.get("loras")
     if isinstance(profile_loras, list):
         loras = [item for item in profile_loras if isinstance(item, dict)]
     else:
         loras = _get_loras_list(kwargs)
-    if selected_text:
-        loras.extend(_parse_lora_text(selected_text))
-    return selected_style, selected_text, loras, selected_index
+    return selected_style, loras, selected_index
+
+
+def _lora_combo_values() -> list[str]:
+    try:
+        import folder_paths  # type: ignore
+
+        names = [str(name) for name in folder_paths.get_filename_list("loras")]
+    except Exception:
+        names = []
+    return names or ["None"]
 
 
 class EasyUseAnimaPromptCorrector:
@@ -714,11 +701,8 @@ class EasyUseAnimaLoraPreset:
                     "step": 1,
                     "tooltip": "Number of saved profiles shown in the front-end tab bar.",
                 }),
-                "text": ("STRING", {
-                    "multiline": True,
-                    "default": "",
-                    "placeholder": "Search LoRAs or paste <lora:name:strength> syntax...",
-                    "tooltip": "LoRA search/paste field. Text LoRA syntax is also parsed into the stack.",
+                "lora_name": (_lora_combo_values(), {
+                    "tooltip": "Internal LoRA selector used by the EasyUse Anima front-end.",
                 }),
                 "loras": ("LORAS", {
                     "default": [],
@@ -750,7 +734,7 @@ class EasyUseAnimaLoraPreset:
         style_prompt: str,
         profile_index: int,
         profile_count: int,
-        text: str,
+        lora_name: str,
         loras,
         profile_data: str,
         **kwargs,
@@ -759,12 +743,11 @@ class EasyUseAnimaLoraPreset:
         if loras is not None:
             kwargs["loras"] = loras
 
-        selected_style, _selected_text, selected_loras, selected_index = _select_profile_values(
+        selected_style, selected_loras, selected_index = _select_profile_values(
             profile_index,
             profile_count,
             profile_data,
             style_prompt,
-            text,
             kwargs,
         )
 
@@ -787,7 +770,8 @@ class EasyUseAnimaLoraPreset:
             raw_name = str(lora.get("name", "")).strip()
             if not raw_name:
                 continue
-            lora_name = _apply_lora_syntax_format(raw_name)
+            lora_name = raw_name.replace("\\", "/")
+            active_lora_name = _apply_lora_syntax_format(lora_name)
             try:
                 model_strength = float(lora.get("strength", 1.0))
             except (TypeError, ValueError):
@@ -805,7 +789,7 @@ class EasyUseAnimaLoraPreset:
             lora_path, lora_trigger_words = _get_lora_info(lora_name)
             stack.append((str(lora_path).replace("/", os.sep), model_strength, clip_strength))
             trigger_words.extend(lora_trigger_words)
-            active_loras.append((lora_name, model_strength, clip_strength))
+            active_loras.append((active_lora_name, model_strength, clip_strength))
 
         active_loras_text_parts = []
         for name, model_strength, clip_strength in active_loras:

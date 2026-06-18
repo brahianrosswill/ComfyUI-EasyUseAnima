@@ -2,12 +2,11 @@ import { app } from "../../../scripts/app.js";
 
 const NODE_TYPE = "EasyUseAnimaLoraPreset";
 const MAX_PROFILES = 16;
-const LORA_SYNTAX_RE = /<\s*lora\s*:\s*([^:>]+?)\s*:\s*([-+]?\d*\.?\d+)(?:\s*:\s*([-+]?\d*\.?\d+))?\s*>/gi;
 const WIDGET_INDEX = {
   stylePrompt: 0,
   profileIndex: 1,
   profileCount: 2,
-  text: 3,
+  loraName: 3,
   loras: 4,
   profileData: 5,
 };
@@ -18,13 +17,10 @@ let loraManagerModulesPromise = null;
 
 async function loadLoraManagerModules() {
   if (!loraManagerModulesPromise) {
-    loraManagerModulesPromise = Promise.all([
-      import("../../comfyui-lora-manager/autocomplete.js"),
-      import("../../comfyui-lora-manager/preview_tooltip.js"),
-    ]).then(([autocompleteModule, previewModule]) => ({
-      AutoComplete: autocompleteModule.AutoComplete,
-      PreviewTooltip: previewModule.PreviewTooltip,
-    })).catch((error) => {
+    loraManagerModulesPromise = import("../../comfyui-lora-manager/preview_tooltip.js")
+      .then((previewModule) => ({
+        PreviewTooltip: previewModule.PreviewTooltip,
+      })).catch((error) => {
       console.warn("EasyUse Anima: LoraManager UI is unavailable.", error);
       return null;
     });
@@ -188,101 +184,9 @@ function setLorasWidgetValue(node, loras) {
   renderLoraRows(node);
 }
 
-function parseLoraSyntaxText(text) {
-  const loras = [];
-  LORA_SYNTAX_RE.lastIndex = 0;
-  let match = LORA_SYNTAX_RE.exec(String(text || ""));
-  while (match) {
-    const strength = Number(match[2]);
-    const clipStrength = match[3] == null ? strength : Number(match[3]);
-    if (match[1] && Number.isFinite(strength) && Number.isFinite(clipStrength)) {
-      loras.push({
-        name: match[1].trim(),
-        strength,
-        clipStrength,
-        active: true,
-      });
-    }
-    match = LORA_SYNTAX_RE.exec(String(text || ""));
-  }
-  return loras;
-}
-
-function mergeParsedLoras(parsedLoras, currentLoras) {
-  const byName = new Map(parsedLoras.map((lora) => [lora.name, lora]));
-  const result = [];
-  const used = new Set();
-
-  for (const current of currentLoras) {
-    const parsed = byName.get(current.name);
-    if (!parsed) {
-      continue;
-    }
-    result.push({
-      ...current,
-      strength: parsed.strength,
-      clipStrength: parsed.clipStrength,
-      active: current.active ?? true,
-    });
-    used.add(current.name);
-  }
-
-  for (const parsed of parsedLoras) {
-    if (!used.has(parsed.name)) {
-      result.push(parsed);
-    }
-  }
-  return result;
-}
-
-function lorasSignature(loras) {
-  return JSON.stringify((Array.isArray(loras) ? loras : []).map((lora) => ({
-    name: lora.name,
-    strength: lora.strength,
-    clipStrength: lora.clipStrength,
-    active: lora.active ?? true,
-  })));
-}
-
-function syncTextToLoras(node) {
-  if (node.__easyuseAnimaLoadingProfile) {
-    return;
-  }
-  const textWidget = findWidget(node, "text");
-  const lorasWidget = findWidget(node, "loras");
-  if (!textWidget || !lorasWidget) {
-    return;
-  }
-  const input = findInputEl(textWidget);
-  if (input) {
-    textWidget.value = input.value;
-  }
-  const text = String(widgetValue(textWidget, ""));
-  const parsedLoras = parseLoraSyntaxText(text);
-  if (!parsedLoras.length && text.trim()) {
-    return;
-  }
-  const mergedLoras = parsedLoras.length ? mergeParsedLoras(parsedLoras, lorasWidgetValue(node)) : [];
-  if (lorasSignature(mergedLoras) === lorasSignature(lorasWidgetValue(node))) {
-    saveCurrentProfile(node);
-    return;
-  }
-  setLorasWidgetValue(node, mergedLoras);
-  saveCurrentProfile(node);
-}
-
-function scheduleLoraSync(node, delay = 120) {
-  clearTimeout(node.__easyuseAnimaLoraSyncTimer);
-  node.__easyuseAnimaLoraSyncTimer = setTimeout(() => {
-    node.__easyuseAnimaLoraSyncTimer = null;
-    syncTextToLoras(node);
-  }, delay);
-}
-
 function currentProfile(node) {
   return {
     style_prompt: String(widgetValue(findWidget(node, "style_prompt"), "")),
-    text: String(widgetValue(findWidget(node, "text"), "")),
     loras: lorasWidgetValue(node),
   };
 }
@@ -317,7 +221,6 @@ function emptyProfile(index = 1) {
   return {
     name: defaultProfileName(index),
     style_prompt: "",
-    text: "",
     loras: [],
   };
 }
@@ -339,7 +242,6 @@ function loadProfile(node, index, options = {}) {
   node.__easyuseAnimaLoadingProfile = true;
   try {
     setWidgetValue(findWidget(node, "style_prompt"), String(profile.style_prompt ?? ""));
-    setWidgetValue(findWidget(node, "text"), String(profile.text ?? ""));
     setLorasWidgetValue(node, Array.isArray(profile.loras) ? profile.loras : []);
   } finally {
     node.__easyuseAnimaLoadingProfile = false;
@@ -479,6 +381,7 @@ function detachInternalWidget(node, name) {
 function finalizeInternalWidgets(node) {
   detachInternalWidget(node, "profile_data");
   detachInternalWidget(node, "profile_count");
+  detachInternalWidget(node, "lora_name");
   detachInternalWidget(node, "loras");
 }
 
@@ -555,132 +458,66 @@ function removeLoraEntry(node, index) {
   });
 }
 
-function parsePickerInput(value) {
-  const parsed = parseLoraSyntaxText(value);
-  if (parsed.length) {
-    return parsed[0];
+function comboValues(widget) {
+  const raw = widget?.options?.values || widget?.values || widget?.inputSpec?.[0] || [];
+  if (Array.isArray(raw)) {
+    return raw;
   }
-  const name = String(value || "").trim();
-  if (!name) {
-    return null;
+  if (raw && typeof raw === "object") {
+    return Object.keys(raw);
   }
+  return [];
+}
+
+function loraNameValues(node) {
+  return comboValues(findWidget(node, "lora_name"))
+    .map((value) => String(value || "").trim())
+    .filter((value) => value && value !== "None");
+}
+
+function loraEntryFromName(name, base = {}) {
+  const modelStrength = Number.isFinite(Number(base.strength)) ? Number(base.strength) : 1;
+  const clipStrength = Number.isFinite(Number(base.clipStrength)) ? Number(base.clipStrength) : modelStrength;
   return {
-    name,
-    strength: 1,
-    clipStrength: 1,
-    active: true,
+    name: String(name || "").trim(),
+    strength: modelStrength,
+    clipStrength,
+    active: base.active ?? true,
   };
 }
 
-async function openLoraPicker(node, onChoose, initialValue = "") {
-  const modules = await loadLoraManagerModules();
-  if (!modules?.AutoComplete) {
-    const fallback = window.prompt("LoRA name", initialValue);
-    if (fallback != null) {
-      onChoose(parsePickerInput(fallback));
-    }
+function menuEvent(event) {
+  if (event instanceof Event) {
+    return event;
+  }
+  const mouse = app.canvas?.last_mouse;
+  return app.canvas?.last_mouse_event || new MouseEvent("click", {
+    clientX: Array.isArray(mouse) ? mouse[0] : window.innerWidth / 2,
+    clientY: Array.isArray(mouse) ? mouse[1] : window.innerHeight / 2,
+  });
+}
+
+function openLoraMenu(node, event, onChoose) {
+  const values = loraNameValues(node);
+  if (!values.length) {
+    window.alert("No LoRA files found. Refresh ComfyUI after adding LoRAs.");
     return;
   }
-
-  const overlay = document.createElement("div");
-  overlay.style.cssText = [
-    "position: fixed",
-    "inset: 0",
-    "z-index: 10000",
-    "background: rgba(0, 0, 0, 0.32)",
-    "display: flex",
-    "align-items: flex-start",
-    "justify-content: center",
-    "padding-top: 12vh",
-  ].join(";");
-
-  const panel = document.createElement("div");
-  panel.style.cssText = [
-    "width: min(560px, calc(100vw - 48px))",
-    "background: #202020",
-    "border: 1px solid #555",
-    "border-radius: 6px",
-    "box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45)",
-    "padding: 12px",
-    "color: #ddd",
-  ].join(";");
-
-  const title = document.createElement("div");
-  title.textContent = "Add LoRA";
-  title.style.cssText = "font-weight: 700; margin-bottom: 8px;";
-
-  const input = document.createElement("textarea");
-  input.value = initialValue;
-  input.placeholder = "Type LoRA name, then use LoRA Manager autocomplete preview.";
-  input.rows = 3;
-  input.style.cssText = [
-    "box-sizing: border-box",
-    "width: 100%",
-    "min-height: 72px",
-    "resize: vertical",
-    "background: #111",
-    "color: #ddd",
-    "border: 1px solid #555",
-    "border-radius: 4px",
-    "padding: 7px",
-  ].join(";");
-
-  const controls = document.createElement("div");
-  controls.style.cssText = "display: flex; gap: 8px; justify-content: flex-end; margin-top: 10px;";
-
-  const addButton = document.createElement("button");
-  addButton.textContent = "Add";
-  addButton.style.cssText = "padding: 5px 12px; cursor: pointer;";
-
-  const cancelButton = document.createElement("button");
-  cancelButton.textContent = "Cancel";
-  cancelButton.style.cssText = "padding: 5px 12px; cursor: pointer;";
-
-  const close = () => {
-    autocomplete?.cleanup?.();
-    overlay.remove();
-    app.graph?.setDirtyCanvas?.(true, true);
-  };
-
-  addButton.onclick = () => {
-    const entry = parsePickerInput(input.value);
-    if (entry) {
-      onChoose(entry);
-    }
-    close();
-  };
-  cancelButton.onclick = close;
-  overlay.addEventListener("mousedown", (event) => {
-    if (event.target === overlay) {
-      close();
-    }
+  const canvas = app.canvas;
+  new LiteGraph.ContextMenu(values, {
+    event: menuEvent(event),
+    title: "Choose a LoRA",
+    scale: Math.max(1, Number(canvas?.ds?.scale) || 1),
+    className: "dark",
+    callback: (value) => {
+      const name = String(value?.content ?? value ?? "").trim();
+      if (!name) {
+        return;
+      }
+      setWidgetValue(findWidget(node, "lora_name"), name);
+      onChoose(loraEntryFromName(name));
+    },
   });
-  input.addEventListener("keydown", (event) => {
-    if (event.key === "Escape") {
-      event.preventDefault();
-      close();
-    }
-    if (event.key === "Enter" && event.ctrlKey) {
-      event.preventDefault();
-      addButton.click();
-    }
-  });
-
-  controls.append(addButton, cancelButton);
-  panel.append(title, input, controls);
-  overlay.append(panel);
-  document.body.append(overlay);
-
-  const autocomplete = new modules.AutoComplete(input, "loras", {
-    minChars: 1,
-    maxItems: 80,
-    pageSize: 30,
-    visibleItems: 10,
-    showPreview: true,
-  });
-  input.focus();
-  input.setSelectionRange(input.value.length, input.value.length);
-  input.dispatchEvent(new Event("input", { bubbles: true }));
 }
 
 async function showLoraPreview(node, name, event) {
@@ -859,9 +696,9 @@ class EasyUseAnimaLoraRowWidget {
       return true;
     }
     if (this.contains(pos, "name")) {
-      openLoraPicker(node, (entry) => {
-        updateLoraEntry(node, this.index, entry);
-      }, `<lora:${lora.name || ""}:${formatStrength(lora.strength ?? 1)}>`);
+      openLoraMenu(node, event, (entry) => {
+        updateLoraEntry(node, this.index, loraEntryFromName(entry.name, lora));
+      });
       return true;
     }
     return false;
@@ -958,13 +795,13 @@ function ensureTabsWidget(node) {
     }
   }
   const controls = [selector, addButton, renameButton, deleteButton].filter(Boolean);
-  const lorasIndex = node.widgets?.findIndex((widget) => widget.name === "loras") ?? -1;
-  if (lorasIndex >= 0 && controls.length) {
+  const insertBeforeIndex = node.widgets?.findIndex((widget) => widget.name === "lora_name" || widget.name === "loras") ?? -1;
+  if (insertBeforeIndex >= 0 && controls.length) {
     node.widgets = node.widgets.filter((widget) => !widget.__easyuseAnimaControlWidget);
-    node.widgets.splice(lorasIndex, 0, ...controls);
+    node.widgets.splice(insertBeforeIndex, 0, ...controls);
   }
   const addLoraButton = node.addWidget("button", "add_lora", "Add LoRA", (event) => {
-    openLoraPicker(node, (entry) => addLoraEntry(node, entry));
+    openLoraMenu(node, event, (entry) => addLoraEntry(node, entry));
   });
   addLoraButton.serialize = false;
   node.__easyuseAnimaAddLoraButton = addLoraButton;
@@ -984,44 +821,6 @@ function wrapWidgetCallback(node, name, callback) {
     callback?.();
     return result;
   };
-}
-
-async function hookLoraManagerAutocomplete(node, attempt = 0) {
-  const textWidget = findWidget(node, "text");
-  const input = findInputEl(textWidget);
-  if (!textWidget || !input) {
-    if (attempt < 12) {
-      setTimeout(() => hookLoraManagerAutocomplete(node, attempt + 1), 80);
-    }
-    return;
-  }
-  if (input.__easyuseAnimaLoraManagerAutocomplete) {
-    return;
-  }
-
-  const modules = await loadLoraManagerModules();
-  if (!modules?.AutoComplete) {
-    return;
-  }
-
-  input.__easyuseAnimaLoraManagerAutocomplete = true;
-  node.__easyuseAnimaLoraManagerAutocomplete = new modules.AutoComplete(input, "loras", {
-    minChars: 1,
-    maxItems: 50,
-    pageSize: 20,
-    visibleItems: 8,
-    showPreview: false,
-  });
-
-  const sync = () => scheduleLoraSync(node);
-  input.addEventListener("input", sync);
-  input.addEventListener("change", sync);
-  textWidget.callback = function (value) {
-    const result = textWidget.__easyuseAnimaPreviousCallback?.call(this, value);
-    sync();
-    return result;
-  };
-  scheduleLoraSync(node, 0);
 }
 
 function syncAfterWidgetChange(node) {
@@ -1045,13 +844,7 @@ function initializeNode(node) {
   enforceNodeLayout(node);
 
   wrapWidgetCallback(node, "style_prompt", () => syncAfterWidgetChange(node));
-  wrapWidgetCallback(node, "text", () => syncAfterWidgetChange(node));
   wrapWidgetCallback(node, "loras", () => syncAfterWidgetChange(node));
-  const textWidget = findWidget(node, "text");
-  if (textWidget && !textWidget.__easyuseAnimaPreviousCallback) {
-    textWidget.__easyuseAnimaPreviousCallback = textWidget.callback;
-  }
-  hookLoraManagerAutocomplete(node);
   wrapWidgetCallback(node, "profile_count", () => {
     if (node.__easyuseAnimaSuppressProfileCountCallback) {
       return;
