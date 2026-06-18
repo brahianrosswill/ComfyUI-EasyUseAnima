@@ -12,6 +12,7 @@ SETTINGS_FILE = PACKAGE_DATA_DIR / "settings.json"
 DEFAULT_SETTINGS = {
     "prompt.metadata_filter_words": "",
     "autocomplete.source": "localsmile_kr_wiki",
+    "autocomplete.limit": "20",
     "prompt_studio.typo_indicator": "true",
     "prompt_studio.colors": "",
 }
@@ -53,6 +54,7 @@ def public_settings() -> dict:
             "autocomplete.source",
             DEFAULT_SETTINGS["autocomplete.source"],
         ),
+        "autocomplete.limit": resolve_autocomplete_limit(settings),
         "prompt_studio.typo_indicator": settings.get(
             "prompt_studio.typo_indicator",
             DEFAULT_SETTINGS["prompt_studio.typo_indicator"],
@@ -75,3 +77,12 @@ def resolve_metadata_filter_words() -> str:
 def resolve_autocomplete_source() -> str:
     settings = get_settings()
     return settings.get("autocomplete.source", DEFAULT_SETTINGS["autocomplete.source"])
+
+
+def resolve_autocomplete_limit(settings: dict | None = None) -> int:
+    settings = settings or get_settings()
+    try:
+        value = int(settings.get("autocomplete.limit", DEFAULT_SETTINGS["autocomplete.limit"]))
+    except (TypeError, ValueError):
+        value = int(DEFAULT_SETTINGS["autocomplete.limit"])
+    return max(1, min(100, value))

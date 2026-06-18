@@ -10,9 +10,13 @@ from pathlib import Path
 
 try:
     from .anima_prompt.knowledge import PACKAGE_DATA_DIR
+    from .anima_prompt.models import TagSection
+    from .anima_prompt.ordering import builtin_tag_section
     from .anima_prompt.parser import parse_prompt
 except ImportError:
     from anima_prompt.knowledge import PACKAGE_DATA_DIR
+    from anima_prompt.models import TagSection
+    from anima_prompt.ordering import builtin_tag_section
     from anima_prompt.parser import parse_prompt
 
 AUTOCOMPLETE_CSV = PACKAGE_DATA_DIR / "KR_danbooru_tags_with_description v3_modified.csv"
@@ -256,8 +260,20 @@ def _token_section(token: str, entry: AutocompleteEntry | None) -> tuple[str, st
             }
             return (entry.category, labels.get(entry.category, entry.category or "태그"))
         return ("artist_unknown", "미등록 작가")
+    builtin_section = builtin_tag_section(base)
+    if builtin_section is TagSection.QUALITY:
+        return ("quality", "품질")
+    if builtin_section is TagSection.META:
+        return ("meta", "메타")
+    if builtin_section is TagSection.YEAR:
+        return ("year", "연도")
+    if builtin_section is TagSection.SAFETY:
+        return ("safety", "등급")
+    if builtin_section is TagSection.COUNT:
+        return ("count", "인원수")
     if entry:
         labels = {
+            "quality": "품질",
             "character": "캐릭터",
             "artist": "작가",
             "copyright": "작품",

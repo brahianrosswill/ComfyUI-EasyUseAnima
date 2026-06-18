@@ -46,13 +46,44 @@ const GENERIC_NODE_PATTERNS = [
   /prompt/i,
 ];
 
-const MAX_RESULTS = 20;
+const DEFAULT_MAX_RESULTS = 20;
+const MAX_RESULT_LIMIT = 100;
 const MIN_QUERY_LENGTH = 1;
 const cache = new Map();
 
+let maxResults = DEFAULT_MAX_RESULTS;
 let popup = null;
 let activeState = null;
 let activeRefreshFrame = null;
+
+function clamp(value, min, max) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function clampMaxResults(value) {
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isFinite(parsed)) {
+    return DEFAULT_MAX_RESULTS;
+  }
+  return clamp(parsed, 1, MAX_RESULT_LIMIT);
+}
+
+async function refreshAutocompleteSettings() {
+  try {
+    const response = await fetch("/easyuse_anima/settings");
+    if (!response.ok) {
+      return;
+    }
+    const settings = await response.json();
+    const nextMaxResults = clampMaxResults(settings["autocomplete.limit"]);
+    if (nextMaxResults !== maxResults) {
+      maxResults = nextMaxResults;
+      cache.clear();
+    }
+  } catch {
+    // Keep the built-in default if settings cannot be read.
+  }
+}
 
 function ensureStyle() {
   if (document.getElementById("easyuse-anima-autocomplete-style")) {
@@ -362,25 +393,35 @@ function positionPopup(input) {
   const inputRect = input.getBoundingClientRect();
   const caretRect = caretClientRect(input);
   const width = Math.max(260, Math.min(380, inputRect.width, window.innerWidth - 8));
-  const left = Math.min(window.innerWidth - width - 4, Math.max(4, caretRect.left));
   const lineHeight = Math.max(14, caretRect.height || Number.parseFloat(getComputedStyle(input).lineHeight) || 18);
-  const visibleCaretBottom = Math.min(inputRect.bottom, Math.max(inputRect.top, caretRect.bottom));
-  const top = Math.max(visibleCaretBottom + lineHeight + 8, caretRect.top + lineHeight * 2 + 8);
-  const maxHeight = Math.max(80, window.innerHeight - top - 4);
+  const caretLeft = clamp(caretRect.left, inputRect.left, inputRect.right);
+  const caretTop = clamp(
+    caretRect.top,
+    inputRect.top,
+    Math.max(inputRect.top, inputRect.bottom - lineHeight),
+  );
+  const caretBottom = clamp(
+    caretTop + lineHeight,
+    inputRect.top + lineHeight,
+    inputRect.bottom,
+  );
+  const left = clamp(caretLeft, 4, Math.max(4, window.innerWidth - width - 4));
+  const top = caretBottom + lineHeight + 12;
+  const maxHeight = Math.max(56, window.innerHeight - top - 8);
   menu.style.left = `${left}px`;
-  menu.style.top = `${Math.max(4, top)}px`;
+  menu.style.top = `${top}px`;
   menu.style.width = `${width}px`;
   menu.style.maxHeight = `${Math.min(280, maxHeight)}px`;
 }
 
 async function search(query, artistOnly = false) {
-  const key = `${artistOnly ? "artist" : "all"}:${query.toLocaleLowerCase()}`;
+  const key = `${artistOnly ? "artist" : "all"}:${maxResults}:${query.toLocaleLowerCase()}`;
   if (cache.has(key)) {
     return cache.get(key);
   }
   const category = artistOnly ? "&category=artist_or_general" : "";
   const response = await fetch(
-    `/easyuse_anima/autocomplete?q=${encodeURIComponent(query)}&limit=${MAX_RESULTS}${category}`,
+    `/easyuse_anima/autocomplete?q=${encodeURIComponent(query)}&limit=${maxResults}${category}`,
   );
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
@@ -421,8 +462,18 @@ function commitSuggestion(state, entry) {
   hidePopup();
 }
 
+function displayTagText(value) {
+  return String(value || "")
+    .replaceAll("_", " ")
+    .replace(/\\([()])/g, "$1");
+}
+
+function promptTagText(value) {
+  return displayTagText(value).replace(/[()]/g, "\\$&");
+}
+
 function completionText(token, entry) {
-  const tag = String(entry?.tag || "");
+  const tag = promptTagText(entry?.tag);
   const segment = String(token.segment || "").trim();
   const query = parseAutocompleteText(token.query);
   const weighted = /^\(\s*@?[\s\S]*(:\s*[-+]?\d+(?:\.\d+)?)\s*\)\s*$/.exec(segment);
@@ -484,7 +535,7 @@ function renderResults(state, results) {
     const top = document.createElement("div");
     const tag = document.createElement("span");
     tag.className = "easyuse-anima-autocomplete-tag";
-    tag.textContent = entry.tag || "";
+    tag.textContent = displayTagText(entry.tag);
 
     const meta = document.createElement("span");
     meta.className = "easyuse-anima-autocomplete-meta";
@@ -648,9 +699,19 @@ document.addEventListener("wheel", (event) => {
 }, true);
 document.addEventListener("selectionchange", scheduleActiveRefresh);
 window.addEventListener("resize", scheduleActiveRefresh);
+window.addEventListener("easyuse-anima-settings-updated", (event) => {
+  if (event?.detail && "autocomplete.limit" in event.detail) {
+    maxResults = clampMaxResults(event.detail["autocomplete.limit"]);
+    cache.clear();
+    scheduleActiveRefresh();
+  }
+});
 
 app.registerExtension({
   name: "easyuse-anima.autocomplete",
+  async setup() {
+    await refreshAutocompleteSettings();
+  },
   async beforeRegisterNodeDef(nodeType, nodeData) {
     if (!targetWidgets(nodeData)) {
       return;

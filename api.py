@@ -7,7 +7,12 @@ except ImportError:
     server = None
     web = None
 
-from .settings import public_settings, resolve_autocomplete_source, save_setting
+from .settings import (
+    public_settings,
+    resolve_autocomplete_limit,
+    resolve_autocomplete_source,
+    save_setting,
+)
 from .autocomplete_dataset import (
     autocomplete_status,
     available_autocomplete_sources,
@@ -62,9 +67,9 @@ if server is not None and web is not None:
             "artist_or_general": "artist,general",
         }.get(category)
         try:
-            limit = int(request.query.get("limit", "20"))
+            limit = int(request.query.get("limit", resolve_autocomplete_limit()))
         except ValueError:
-            limit = 20
+            limit = resolve_autocomplete_limit()
         _, path = resolve_autocomplete_source_path(resolve_autocomplete_source())
         return web.json_response(
             search_autocomplete(

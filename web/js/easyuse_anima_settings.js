@@ -41,6 +41,9 @@ async function getAutocompleteStatus() {
 const autocompletePanels = new Set();
 
 const PROMPT_STUDIO_COLOR_DEFAULTS = {
+  quality: { label: "품질", color: "#facc15" },
+  safety: { label: "등급", color: "#38bdf8" },
+  year: { label: "연도", color: "#2dd4bf" },
   count: { label: "인원수", color: "#60a5fa" },
   character: { label: "캐릭터", color: "#f472b6" },
   artist: { label: "작가", color: "#a78bfa" },
@@ -219,7 +222,15 @@ function promptStudioEditor(settings = {}) {
   return container;
 }
 
-function autocompleteDatasetSelector(initialValue = "") {
+function autocompleteDatasetSelector(initialValue = {}) {
+  const initialSource =
+    typeof initialValue === "object" && initialValue !== null
+      ? initialValue.source || ""
+      : String(initialValue || "");
+  const initialLimit =
+    typeof initialValue === "object" && initialValue !== null
+      ? initialValue.limit || 20
+      : 20;
   const container = document.createElement("div");
   container.style.cssText = "max-width: 760px; line-height: 1.45;";
 
@@ -235,14 +246,27 @@ function autocompleteDatasetSelector(initialValue = "") {
   const select = document.createElement("select");
   select.style.cssText = "min-width: min(100%, 340px); padding: 4px 8px;";
 
+  const limitLabel = document.createElement("label");
+  limitLabel.style.cssText = "display: flex; align-items: center; gap: 6px;";
+  const limitText = document.createElement("span");
+  limitText.textContent = "Suggestions";
+  const limitInput = document.createElement("input");
+  limitInput.type = "number";
+  limitInput.min = "1";
+  limitInput.max = "100";
+  limitInput.step = "1";
+  limitInput.value = String(initialLimit);
+  limitInput.style.cssText = "width: 72px; padding: 4px 6px;";
+  limitLabel.append(limitText, limitInput);
+
   const saveButton = document.createElement("button");
-  saveButton.textContent = "Save Autocomplete CSV";
+  saveButton.textContent = "Save Autocomplete";
   saveButton.style.cssText = "padding: 5px 10px; cursor: pointer;";
 
   const message = document.createElement("span");
   message.style.cssText = "opacity: 0.76;";
 
-  row.append(select, saveButton, message);
+  row.append(select, limitLabel, saveButton, message);
   container.append(row);
 
   const panel = document.createElement("div");
@@ -252,7 +276,7 @@ function autocompleteDatasetSelector(initialValue = "") {
 
   const renderOptions = (status) => {
     const sources = Array.isArray(status.sources) ? status.sources : [];
-    const selected = status.source || initialValue;
+    const selected = status.source || initialSource;
     select.replaceChildren();
     for (const source of sources) {
       const option = document.createElement("option");
@@ -278,10 +302,14 @@ function autocompleteDatasetSelector(initialValue = "") {
     try {
       saveButton.disabled = true;
       saveButton.textContent = "Saving...";
-      const data = await saveSetting("autocomplete.source", select.value);
+      const limit = Math.max(1, Math.min(100, Number.parseInt(limitInput.value || "20", 10) || 20));
+      limitInput.value = String(limit);
+      await saveSetting("autocomplete.source", select.value);
+      const data = await saveSetting("autocomplete.limit", String(limit));
       message.textContent = "Saved";
       message.style.color = "#16a34a";
       renderOptions({ sources: panel._easyuseSources || [], source: data["autocomplete.source"] });
+      window.dispatchEvent(new CustomEvent("easyuse-anima-settings-updated", { detail: data }));
       await refreshAutocompletePanels();
     } catch (error) {
       message.textContent = `Save failed: ${error.message || error}`;
@@ -379,7 +407,10 @@ app.registerExtension({
     app.ui.settings.addSetting({
       id: "EasyUseAnima.Prompt.AutocompleteCsv",
       name: "EasyUse Anima: Autocomplete CSV",
-      type: () => autocompleteDatasetSelector(settings["autocomplete.source"] || ""),
+      type: () => autocompleteDatasetSelector({
+        source: settings["autocomplete.source"] || "",
+        limit: settings["autocomplete.limit"] || 20,
+      }),
       tooltip: "Select which bundled Korean Danbooru CSV powers autocomplete and tag highlighting.",
     });
 

@@ -2,32 +2,78 @@
 
 from __future__ import annotations
 
+import re
+
 from .models import TagInfo, TagSection
 from .normalize import lookup_key
 
-QUALITY_TAGS = {
-    "masterpiece",
-    "best quality",
-    "high quality",
-    "absurdres",
-}
-META_TAGS = {
-    "highres",
-    "official art",
-    "scan",
-}
-YEAR_TAGS = {
-    "oldest",
-    "old",
-    "recent",
-    "newest",
-}
-SAFETY_TAGS = {
-    "safe",
-    "sensitive",
-    "questionable",
-    "explicit",
-}
+QUALITY_TAGS = frozenset(
+    {
+        "masterpiece",
+        "best quality",
+        "great quality",
+        "good quality",
+        "high quality",
+        "normal quality",
+        "average quality",
+        "low quality",
+        "bad quality",
+        "worst quality",
+        "high score",
+        "great score",
+        "good score",
+        "average score",
+        "bad score",
+        "low score",
+        "score 9",
+        "score 8",
+        "score 7",
+        "score 7:",
+        "score 6",
+        "score 5",
+        "score 4",
+        "very aesthetic",
+        "aesthetic",
+        "displeasing",
+        "very displeasing",
+    }
+)
+META_TAGS = frozenset(
+    {
+        "highres",
+        "absurdres",
+        "lowres",
+        "official art",
+        "scan",
+        "source anime",
+        "source pony",
+        "source furry",
+        "source cartoon",
+    }
+)
+YEAR_TAGS = frozenset(
+    {
+        "oldest",
+        "old",
+        "early",
+        "mid",
+        "recent",
+        "newest",
+    }
+)
+SAFETY_TAGS = frozenset(
+    {
+        "safe",
+        "sensitive",
+        "nsfw",
+        "questionable",
+        "explicit",
+        "rating safe",
+        "rating questionable",
+        "rating explicit",
+    }
+)
+YEAR_TAG_PATTERN = re.compile(r"^year\s+\d+$")
 
 ANIMA_PERSON_COUNT_TAGS = frozenset(
     {
@@ -70,19 +116,28 @@ SECTION_ORDER = {
     TagSection.UNKNOWN: 8,
 }
 
+BUILTIN_TAG_SECTIONS = {
+    **{tag: TagSection.QUALITY for tag in QUALITY_TAGS},
+    **{tag: TagSection.META for tag in META_TAGS},
+    **{tag: TagSection.YEAR for tag in YEAR_TAGS},
+    **{tag: TagSection.SAFETY for tag in SAFETY_TAGS},
+    **{tag: TagSection.COUNT for tag in ANIMA_PERSON_COUNT_TAGS},
+}
+
+
+def builtin_tag_section(tag: str) -> TagSection | None:
+    key = lookup_key(tag)
+    if key in BUILTIN_TAG_SECTIONS:
+        return BUILTIN_TAG_SECTIONS[key]
+    if YEAR_TAG_PATTERN.match(key):
+        return TagSection.YEAR
+    return None
+
 
 def classify_tag(tag: str, info: TagInfo | None = None) -> TagSection:
-    key = lookup_key(tag)
-    if key in QUALITY_TAGS:
-        return TagSection.QUALITY
-    if key in META_TAGS:
-        return TagSection.META
-    if key in YEAR_TAGS:
-        return TagSection.YEAR
-    if key in SAFETY_TAGS:
-        return TagSection.SAFETY
-    if key in ANIMA_PERSON_COUNT_TAGS:
-        return TagSection.COUNT
+    section = builtin_tag_section(tag)
+    if section is not None:
+        return section
     if tag.strip().startswith("@"):
         return TagSection.ARTIST
 

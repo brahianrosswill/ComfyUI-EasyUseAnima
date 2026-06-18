@@ -7,7 +7,7 @@ from pathlib import Path
 
 from .models import TagInfo
 from .normalize import lookup_key
-from .ordering import ANIMA_PERSON_COUNT_TAGS
+from .ordering import TagSection, builtin_tag_section
 
 PACKAGE_DATA_DIR = Path(__file__).resolve().parents[1] / "__easyuse_anima__"
 
@@ -24,8 +24,17 @@ class PromptKnowledgeBase:
 
     def lookup(self, tag: str) -> TagInfo | None:
         key = lookup_key(tag)
-        if key in ANIMA_PERSON_COUNT_TAGS:
+        section = builtin_tag_section(key)
+        if section is TagSection.COUNT:
             return TagInfo(tag=key, category_path=("인물", "인원수"), source="anima_builtin")
+        if section is TagSection.QUALITY:
+            return TagInfo(tag=key, category_path=("품질",), source="anima_builtin")
+        if section is TagSection.META:
+            return TagInfo(tag=key, category_path=("메타",), source="anima_builtin")
+        if section is TagSection.YEAR:
+            return TagInfo(tag=key, category_path=("연도",), source="anima_builtin")
+        if section is TagSection.SAFETY:
+            return TagInfo(tag=key, category_path=("등급",), source="anima_builtin")
         return None
 
 

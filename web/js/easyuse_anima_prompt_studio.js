@@ -18,6 +18,9 @@ const FIELD_HEIGHTS = {
 };
 
 const SECTION_STYLES = {
+  quality: { label: "품질", color: "#facc15", background: "rgba(202, 138, 4, 0.18)", weight: 700 },
+  safety: { label: "등급", color: "#38bdf8", background: "rgba(2, 132, 199, 0.18)", weight: 600 },
+  year: { label: "연도", color: "#2dd4bf", background: "rgba(13, 148, 136, 0.18)", weight: 600 },
   count: { label: "인원수", color: "#60a5fa", background: "rgba(37, 99, 235, 0.18)", weight: 700 },
   character: { label: "캐릭터", color: "#f472b6", background: "rgba(219, 39, 119, 0.18)", weight: 700 },
   artist: { label: "작가", color: "#a78bfa", background: "rgba(124, 58, 237, 0.18)", weight: 700 },
@@ -29,7 +32,20 @@ const SECTION_STYLES = {
   unknown: { label: "미확인", color: "#cbd5e1", background: "transparent", underline: true, weight: 400 },
 };
 
-const LEGEND_ITEMS = ["count", "character", "artist", "copyright", "general", "meta", "natural", "artist_unknown", "unknown"];
+const LEGEND_ITEMS = [
+  "quality",
+  "safety",
+  "year",
+  "count",
+  "character",
+  "artist",
+  "copyright",
+  "general",
+  "meta",
+  "natural",
+  "artist_unknown",
+  "unknown",
+];
 const LEGEND_TOP_GAP = 14;
 const LEGEND_ROW_HEIGHT = 18;
 const LEGEND_COLUMNS = 2;

@@ -20,7 +20,7 @@ from autocomplete_dataset import (
     resolve_autocomplete_source,
     search_autocomplete,
 )
-from settings import public_settings
+from settings import public_settings, resolve_autocomplete_limit
 
 
 class PromptCorrectorTests(unittest.TestCase):
@@ -71,6 +71,24 @@ class PromptCorrectorTests(unittest.TestCase):
         )
         data = json.loads(report)
         self.assertEqual(data["sections"][0], "count")
+
+    def test_builtin_meta_quality_tags_are_known_without_external_data(self):
+        corrected, report = EasyUseAnimaPromptCorrector().correct(
+            "1girl, lowres, year_2024, rating_safe, score_7:, very_aesthetic, source_anime",
+            "",
+            "",
+        )
+
+        self.assertEqual(
+            corrected,
+            "score 7:, very aesthetic, lowres, source anime, year 2024, rating safe, 1girl",
+        )
+        data = json.loads(report)
+        self.assertEqual(
+            data["sections"],
+            ["quality", "quality", "meta", "meta", "year", "safety", "count"],
+        )
+        self.assertEqual(data["unknown_tags"], [])
 
 
 class PromptBuilderTests(unittest.TestCase):
@@ -194,10 +212,17 @@ class SettingsTests(unittest.TestCase):
             {
                 "prompt.metadata_filter_words",
                 "autocomplete.source",
+                "autocomplete.limit",
                 "prompt_studio.typo_indicator",
                 "prompt_studio.colors",
             },
         )
+
+    def test_autocomplete_limit_is_clamped(self):
+        self.assertEqual(resolve_autocomplete_limit({"autocomplete.limit": "0"}), 1)
+        self.assertEqual(resolve_autocomplete_limit({"autocomplete.limit": "37"}), 37)
+        self.assertEqual(resolve_autocomplete_limit({"autocomplete.limit": "200"}), 100)
+        self.assertEqual(resolve_autocomplete_limit({"autocomplete.limit": "bad"}), 20)
 
 
 class AutocompleteDatasetTests(unittest.TestCase):
@@ -353,6 +378,27 @@ class AutocompleteDatasetTests(unittest.TestCase):
         sections = [token["section"] for token in result["tokens"][:4]]
         self.assertEqual(sections, ["natural", "natural", "count", "unknown"])
         self.assertEqual(result["tokens"][2]["base"], "1girl")
+
+    def test_builtin_meta_quality_tags_are_classified_but_not_autocompleted(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "tags.csv"
+            path.write_text(
+                'unrelated tag,0,1,"[일반] 자동완성 테스트"\n',
+                encoding="utf-8",
+            )
+
+            classified = classify_prompt_text(
+                "rating_safe, score_9, year_2024, source_anime, lowres, very_aesthetic",
+                path=path,
+            )
+            autocomplete = search_autocomplete("score", path=path)
+
+        self.assertEqual(
+            [token["section"] for token in classified["tokens"]],
+            ["safety", "quality", "year", "meta", "meta", "quality"],
+        )
+        self.assertEqual([token["learned"] for token in classified["tokens"]], [False] * 6)
+        self.assertEqual(autocomplete["results"], [])
 
 
 if __name__ == "__main__":
