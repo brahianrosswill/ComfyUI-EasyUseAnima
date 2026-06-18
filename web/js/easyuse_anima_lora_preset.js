@@ -694,6 +694,12 @@ async function showLoraPreview(node, name, event) {
   const x = Number(event?.clientX || window.innerWidth / 2) + 18;
   const y = Number(event?.clientY || window.innerHeight / 2) + 18;
   node.__easyuseAnimaLoraPreviewTooltip.show(name, x, y, true);
+  node.__easyuseAnimaLoraPreviewName = name;
+}
+
+function hideLoraPreview(node) {
+  node.__easyuseAnimaLoraPreviewTooltip?.hide?.();
+  node.__easyuseAnimaLoraPreviewName = null;
 }
 
 function fitCanvasText(ctx, text, maxWidth) {
@@ -806,11 +812,21 @@ class EasyUseAnimaLoraRowWidget {
   }
 
   mouse(event, pos, node) {
-    if (event.type !== "pointerdown") {
-      return false;
-    }
     const lora = lorasWidgetValue(node)[this.index];
     if (!lora) {
+      return false;
+    }
+    if (event.type === "pointermove") {
+      if (this.contains(pos, "preview")) {
+        showLoraPreview(node, lora.name, event);
+        return true;
+      }
+      if (node.__easyuseAnimaLoraPreviewName === lora.name) {
+        hideLoraPreview(node);
+      }
+      return false;
+    }
+    if (event.type !== "pointerdown") {
       return false;
     }
     if (this.contains(pos, "toggle")) {
