@@ -14,7 +14,10 @@ const WIDGET_INDEX = {
 const MIN_NODE_WIDTH = 460;
 const LORA_ROW_HEIGHT = 28;
 const LORA_STRENGTH_STEP = 0.05;
-const LORA_HEADER_HEIGHT = 30;
+const LORA_PANEL_PADDING = 10;
+const LORA_PANEL_HEADER_HEIGHT = 34;
+const LORA_PANEL_ROW_HEIGHT = 34;
+const LORA_PANEL_ADD_HEIGHT = 38;
 const PREVIEW_IMAGE_WIDTH = 384;
 const PREVIEW_IMAGE_HEIGHT = 384;
 let rgthreeInfoDialogPromise = null;
@@ -423,6 +426,7 @@ function detachInternalWidget(node, name) {
 function finalizeInternalWidgets(node) {
   detachInternalWidget(node, "profile_data");
   detachInternalWidget(node, "profile_count");
+  detachInternalWidget(node, "lora_name");
   detachInternalWidget(node, "loras");
 }
 
@@ -434,7 +438,7 @@ function enforceNodeLayout(node) {
   const currentHeight = Number(node.size[1]) || 0;
   const computed = typeof node.computeSize === "function" ? node.computeSize() : null;
   const nextWidth = currentWidth < MIN_NODE_WIDTH ? MIN_NODE_WIDTH : currentWidth;
-  const nextHeight = Math.max(currentHeight, Number(computed?.[1]) || 0);
+  const nextHeight = Math.max(120, Number(computed?.[1]) || currentHeight);
   if (nextWidth !== currentWidth || nextHeight !== currentHeight) {
     node.setSize([nextWidth, nextHeight]);
   }
@@ -510,6 +514,23 @@ function loraEntryFromName(name, base = {}) {
   };
 }
 
+function comboValues(widget) {
+  const raw = widget?.options?.values || widget?.values || widget?.inputSpec?.[0] || [];
+  if (Array.isArray(raw)) {
+    return raw;
+  }
+  if (raw && typeof raw === "object") {
+    return Object.keys(raw);
+  }
+  return [];
+}
+
+function loraNameValues(node) {
+  return comboValues(findWidget(node, "lora_name"))
+    .map((value) => String(value || "").trim())
+    .filter((value) => value && value !== "None");
+}
+
 function handleLoraNameSelected(node, value) {
   if (node.__easyuseAnimaLoadingProfile || node.__easyuseAnimaSuppressLoraNameCallback) {
     return;
@@ -519,6 +540,45 @@ function handleLoraNameSelected(node, value) {
     return;
   }
   addLoraEntry(node, loraEntryFromName(name));
+}
+
+function menuEvent(event) {
+  if (event instanceof Event) {
+    return event;
+  }
+  const mouse = app.canvas?.last_mouse;
+  return app.canvas?.last_mouse_event || new MouseEvent("click", {
+    clientX: Array.isArray(mouse) ? mouse[0] : window.innerWidth / 2,
+    clientY: Array.isArray(mouse) ? mouse[1] : window.innerHeight / 2,
+  });
+}
+
+function openLoraMenu(node, event, onChoose) {
+  const values = loraNameValues(node);
+  if (!values.length) {
+    window.alert("No LoRA files found. Refresh ComfyUI after adding LoRAs.");
+    return;
+  }
+  node.__easyuseAnimaOpeningLoraMenu = true;
+  new LiteGraph.ContextMenu(values, {
+    event: menuEvent(event),
+    title: "Choose a LoRA",
+    scale: Math.max(1, Number(app.canvas?.ds?.scale) || 1),
+    className: "dark",
+    callback: (value) => {
+      const name = String(value?.content ?? value ?? "").trim();
+      if (!name) {
+        return;
+      }
+      node.__easyuseAnimaSuppressLoraNameCallback = true;
+      try {
+        setWidgetValue(findWidget(node, "lora_name"), name);
+      } finally {
+        node.__easyuseAnimaSuppressLoraNameCallback = false;
+      }
+      onChoose(loraEntryFromName(name));
+    },
+  });
 }
 
 async function showLoraInfo(name) {
@@ -691,169 +751,120 @@ function updateLoraNameComboMenu(menu, imageHost) {
   positionComboMenu(menu);
 }
 
-class EasyUseAnimaLoraRowWidget {
-  constructor(index) {
-    this.name = `easyuse_anima_lora_${index}`;
-    this.type = "custom";
-    this.options = { serialize: false };
-    this.serialize = false;
-    this.index = index;
-    this.__easyuseAnimaLoraRowWidget = true;
-    this.hitAreas = {};
-  }
-
-  computeSize(width) {
-    return [width, LORA_ROW_HEIGHT];
-  }
-
-  draw(ctx, node, width, y, height) {
-    const lora = lorasWidgetValue(node)[this.index] || {};
-    const active = lora.active !== false;
-    const margin = 10;
-    const inner = 5;
-    const rowX = margin;
-    const rowW = width - margin * 2;
-    const midY = y + height / 2;
-    const right = width - margin;
-    const deleteW = 22;
-    const previewW = 24;
-    const incW = 20;
-    const valueW = 50;
-    const decW = 20;
-    const toggleW = 18;
-
-    this.hitAreas = {
-      toggle: [rowX + inner, y + 5, toggleW, height - 10],
-      delete: [right - deleteW, y + 4, deleteW, height - 8],
-      preview: [right - deleteW - inner - previewW, y + 4, previewW, height - 8],
-      inc: [right - deleteW - inner - previewW - inner - incW, y + 4, incW, height - 8],
-      value: [right - deleteW - inner - previewW - inner - incW - valueW, y + 4, valueW, height - 8],
-      dec: [right - deleteW - inner - previewW - inner - incW - valueW - decW, y + 4, decW, height - 8],
-    };
-    const nameX = this.hitAreas.toggle[0] + toggleW + inner * 2;
-    const nameW = this.hitAreas.dec[0] - nameX - inner;
-    this.hitAreas.name = [nameX, y + 4, Math.max(40, nameW), height - 8];
-
-    ctx.save();
-    ctx.globalAlpha = active ? 1 : 0.45;
-    ctx.fillStyle = "rgba(60, 72, 92, 0.55)";
-    ctx.strokeStyle = "rgba(120, 132, 155, 0.45)";
-    ctx.beginPath();
-    roundedRect(ctx, rowX, y + 2, rowW, height - 4, 5);
-    ctx.fill();
-    ctx.stroke();
-
-    ctx.fillStyle = active ? "#4aa3df" : "#555";
-    ctx.beginPath();
-    roundedRect(ctx, ...this.hitAreas.toggle, 4);
-    ctx.fill();
-
-    ctx.fillStyle = LiteGraph.WIDGET_TEXT_COLOR;
-    ctx.textAlign = "left";
-    ctx.textBaseline = "middle";
-    ctx.fillText(fitCanvasText(ctx, lora.name || "None", nameW), nameX, midY);
-
-    ctx.textAlign = "center";
-    ctx.fillText("<", this.hitAreas.dec[0] + decW / 2, midY);
-    ctx.fillText(formatStrength(lora.strength ?? 1), this.hitAreas.value[0] + valueW / 2, midY);
-    ctx.fillText(">", this.hitAreas.inc[0] + incW / 2, midY);
-    ctx.fillText("i", this.hitAreas.preview[0] + previewW / 2, midY);
-    ctx.fillText("x", this.hitAreas.delete[0] + deleteW / 2, midY);
-    ctx.restore();
-  }
-
-  contains(pos, area) {
-    const hit = this.hitAreas[area];
-    return !!hit
-      && pos[0] >= hit[0]
-      && pos[0] <= hit[0] + hit[2]
-      && pos[1] >= hit[1]
-      && pos[1] <= hit[1] + hit[3];
-  }
-
-  mouse(event, pos, node) {
-    const lora = lorasWidgetValue(node)[this.index];
-    if (!lora) {
-      return false;
-    }
-    if (event.type !== "pointerdown") {
-      return false;
-    }
-    if (this.contains(pos, "toggle")) {
-      updateLoraEntry(node, this.index, { active: lora.active === false });
-      return true;
-    }
-    if (this.contains(pos, "delete")) {
-      removeLoraEntry(node, this.index);
-      return true;
-    }
-    if (this.contains(pos, "preview")) {
-      showLoraInfo(lora.name);
-      return true;
-    }
-    if (this.contains(pos, "dec")) {
-      updateLoraEntry(node, this.index, { strength: roundStrength((lora.strength ?? 1) - LORA_STRENGTH_STEP) });
-      return true;
-    }
-    if (this.contains(pos, "inc")) {
-      updateLoraEntry(node, this.index, { strength: roundStrength((lora.strength ?? 1) + LORA_STRENGTH_STEP) });
-      return true;
-    }
-    if (this.contains(pos, "value")) {
-      app.canvas.prompt("LoRA strength", lora.strength ?? 1, (value) => {
-        const next = Number(value);
-        if (Number.isFinite(next)) {
-          updateLoraEntry(node, this.index, { strength: roundStrength(next) });
-        }
-      }, event);
-      return true;
-    }
-    return false;
-  }
-}
-
-class EasyUseAnimaLoraHeaderWidget {
+class EasyUseAnimaLoraPanelWidget {
   constructor() {
-    this.name = "easyuse_anima_lora_header";
+    this.name = "easyuse_anima_lora_panel";
     this.type = "custom";
     this.options = { serialize: false };
     this.serialize = false;
     this.__easyuseAnimaLoraRowWidget = true;
     this.hitAreas = {};
+    this.rowHitAreas = [];
+    this.node = null;
   }
 
   computeSize(width) {
-    return [width, LORA_HEADER_HEIGHT];
+    const rows = this.node ? lorasWidgetValue(this.node).length : 0;
+    return [width, LORA_PANEL_PADDING * 2 + LORA_PANEL_HEADER_HEIGHT + rows * LORA_PANEL_ROW_HEIGHT + LORA_PANEL_ADD_HEIGHT + 12];
   }
 
   draw(ctx, node, width, y, height) {
-    const margin = 10;
-    const rowX = margin;
-    const rowW = width - margin * 2;
-    const midY = y + height / 2;
-    const toggleSize = 18;
-    this.hitAreas.toggleAll = [rowX, y + 6, toggleSize, toggleSize];
-
+    this.node = node;
+    this.hitAreas = {};
+    this.rowHitAreas = [];
     const loras = lorasWidgetValue(node);
+    const pad = LORA_PANEL_PADDING;
+    const panelX = pad;
+    const panelY = y + 4;
+    const panelW = width - pad * 2;
+    const panelH = LORA_PANEL_HEADER_HEIGHT + loras.length * LORA_PANEL_ROW_HEIGHT + LORA_PANEL_ADD_HEIGHT + pad * 2;
     const allActive = loras.length > 0 && loras.every((lora) => lora.active !== false);
 
     ctx.save();
-    ctx.fillStyle = "rgba(46, 51, 62, 0.78)";
+    ctx.fillStyle = "rgba(38, 42, 51, 0.92)";
     ctx.beginPath();
-    roundedRect(ctx, rowX, y + 2, rowW, height - 4, 5);
+    roundedRect(ctx, panelX, panelY, panelW, panelH, 7);
     ctx.fill();
 
-    ctx.fillStyle = allActive ? "#4aa3df" : "#555";
+    const toggleSize = 24;
+    const headerY = panelY + pad;
+    this.hitAreas.toggleAll = [panelX + pad, headerY + 5, toggleSize, toggleSize];
+    ctx.fillStyle = allActive ? "#8fa1c9" : "#4b4f57";
     ctx.beginPath();
     roundedRect(ctx, ...this.hitAreas.toggleAll, 4);
     ctx.fill();
 
     ctx.fillStyle = LiteGraph.WIDGET_TEXT_COLOR;
+    ctx.font = "18px sans-serif";
     ctx.textAlign = "left";
     ctx.textBaseline = "middle";
-    ctx.fillText("Toggle All", rowX + toggleSize + 12, midY);
+    ctx.fillText("Toggle All", panelX + pad + toggleSize + 12, headerY + LORA_PANEL_HEADER_HEIGHT / 2);
     ctx.textAlign = "right";
-    ctx.fillText("Strength ↔", width - margin * 2, midY);
+    ctx.fillText("Strength", panelX + panelW - pad, headerY + LORA_PANEL_HEADER_HEIGHT / 2);
+
+    let rowY = headerY + LORA_PANEL_HEADER_HEIGHT;
+    for (let index = 0; index < loras.length; index += 1) {
+      const lora = loras[index] || {};
+      const active = lora.active !== false;
+      const rowX = panelX + pad;
+      const rowW = panelW - pad * 2;
+      const rowH = LORA_PANEL_ROW_HEIGHT - 4;
+      const midY = rowY + rowH / 2;
+      const right = rowX + rowW;
+      const toggleW = 28;
+      const infoW = 28;
+      const arrowW = 26;
+      const valueW = 54;
+      const deleteW = 22;
+      const areas = {
+        toggle: [rowX + 6, rowY + 7, toggleW, 18],
+        info: [right - deleteW - arrowW * 2 - valueW - infoW - 10, rowY + 4, infoW, rowH - 4],
+        dec: [right - deleteW - arrowW * 2 - valueW, rowY + 4, arrowW, rowH - 4],
+        value: [right - deleteW - arrowW - valueW, rowY + 4, valueW, rowH - 4],
+        inc: [right - deleteW - arrowW, rowY + 4, arrowW, rowH - 4],
+        delete: [right - deleteW, rowY + 4, deleteW, rowH - 4],
+      };
+      const nameX = areas.toggle[0] + toggleW + 12;
+      const nameW = areas.info[0] - nameX - 8;
+      this.rowHitAreas[index] = areas;
+
+      ctx.globalAlpha = active ? 1 : 0.45;
+      ctx.fillStyle = "rgba(56, 67, 90, 0.55)";
+      ctx.beginPath();
+      roundedRect(ctx, rowX, rowY + 2, rowW, rowH, 8);
+      ctx.fill();
+      ctx.fillStyle = active ? "#8fa1c9" : "#555";
+      ctx.beginPath();
+      roundedRect(ctx, ...areas.toggle, 8);
+      ctx.fill();
+
+      ctx.fillStyle = LiteGraph.WIDGET_TEXT_COLOR;
+      ctx.font = "18px sans-serif";
+      ctx.textAlign = "left";
+      ctx.fillText(fitCanvasText(ctx, lora.name || "None", nameW), nameX, midY);
+      ctx.textAlign = "center";
+      ctx.font = "17px sans-serif";
+      ctx.fillText("ⓘ", areas.info[0] + infoW / 2, midY);
+      ctx.fillText("◀", areas.dec[0] + arrowW / 2, midY);
+      ctx.fillText(formatStrength(lora.strength ?? 1), areas.value[0] + valueW / 2, midY);
+      ctx.fillText("▶", areas.inc[0] + arrowW / 2, midY);
+      ctx.fillText("×", areas.delete[0] + deleteW / 2, midY);
+      ctx.globalAlpha = 1;
+      rowY += LORA_PANEL_ROW_HEIGHT;
+    }
+
+    const addY = rowY + 6;
+    this.hitAreas.add = [panelX + pad, addY, panelW - pad * 2, LORA_PANEL_ADD_HEIGHT - 8];
+    ctx.strokeStyle = "rgba(180, 180, 185, 0.5)";
+    ctx.fillStyle = "rgba(30, 31, 35, 0.6)";
+    ctx.beginPath();
+    roundedRect(ctx, ...this.hitAreas.add, 5);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = LiteGraph.WIDGET_TEXT_COLOR;
+    ctx.font = "18px sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText("+ Add Lora", panelX + panelW / 2, addY + (LORA_PANEL_ADD_HEIGHT - 8) / 2);
     ctx.restore();
   }
 
@@ -867,17 +878,68 @@ class EasyUseAnimaLoraHeaderWidget {
   }
 
   mouse(event, pos, node) {
-    if (event.type !== "pointerdown" || !this.contains(pos, "toggleAll")) {
+    if (event.type !== "pointerdown") {
       return false;
     }
-    const loras = lorasWidgetValue(node);
-    const nextActive = !(loras.length > 0 && loras.every((lora) => lora.active !== false));
-    mutateLoras(node, (items) => {
-      for (const item of items) {
-        item.active = nextActive;
+    if (this.contains(pos, "add")) {
+      openLoraMenu(node, event, (entry) => addLoraEntry(node, entry));
+      return true;
+    }
+    if (this.contains(pos, "toggleAll")) {
+      const loras = lorasWidgetValue(node);
+      const nextActive = !(loras.length > 0 && loras.every((lora) => lora.active !== false));
+      mutateLoras(node, (items) => {
+        for (const item of items) {
+          item.active = nextActive;
+        }
+      });
+      return true;
+    }
+    for (let index = 0; index < this.rowHitAreas.length; index += 1) {
+      const areas = this.rowHitAreas[index];
+      const lora = lorasWidgetValue(node)[index];
+      if (!areas || !lora) {
+        continue;
       }
-    });
-    return true;
+      const hit = (area) => {
+        const bounds = areas[area];
+        return bounds
+          && pos[0] >= bounds[0]
+          && pos[0] <= bounds[0] + bounds[2]
+          && pos[1] >= bounds[1]
+          && pos[1] <= bounds[1] + bounds[3];
+      };
+      if (hit("toggle")) {
+        updateLoraEntry(node, index, { active: lora.active === false });
+        return true;
+      }
+      if (hit("delete")) {
+        removeLoraEntry(node, index);
+        return true;
+      }
+      if (hit("info")) {
+        showLoraInfo(lora.name);
+        return true;
+      }
+      if (hit("dec")) {
+        updateLoraEntry(node, index, { strength: roundStrength((lora.strength ?? 1) - LORA_STRENGTH_STEP) });
+        return true;
+      }
+      if (hit("inc")) {
+        updateLoraEntry(node, index, { strength: roundStrength((lora.strength ?? 1) + LORA_STRENGTH_STEP) });
+        return true;
+      }
+      if (hit("value")) {
+        app.canvas.prompt("LoRA strength", lora.strength ?? 1, (value) => {
+          const next = Number(value);
+          if (Number.isFinite(next)) {
+            updateLoraEntry(node, index, { strength: roundStrength(next) });
+          }
+        }, event);
+        return true;
+      }
+    }
+    return false;
   }
 }
 
@@ -886,17 +948,9 @@ function renderLoraRows(node) {
     return;
   }
   node.widgets = node.widgets.filter((widget) => !widget.__easyuseAnimaLoraRowWidget);
-  const loraNameWidget = findWidget(node, "lora_name");
-  const loraNameIndex = loraNameWidget ? node.widgets.indexOf(loraNameWidget) : -1;
-  const loras = lorasWidgetValue(node);
-  const rows = loras.length
-    ? [new EasyUseAnimaLoraHeaderWidget(), ...loras.map((_, index) => new EasyUseAnimaLoraRowWidget(index))]
-    : [];
-  if (loraNameIndex >= 0) {
-    node.widgets.splice(loraNameIndex + 1, 0, ...rows);
-  } else {
-    node.widgets.push(...rows);
-  }
+  const panel = new EasyUseAnimaLoraPanelWidget();
+  panel.node = node;
+  node.widgets.push(panel);
   enforceNodeLayout(node);
 }
 
@@ -1149,15 +1203,17 @@ app.registerExtension({
             continue;
           }
           const overWidget = app.canvas?.getWidgetAtCursor?.();
-          if (overWidget?.name !== "lora_name") {
+          if (overWidget?.name !== "lora_name" && !node.__easyuseAnimaOpeningLoraMenu) {
             continue;
           }
           requestAnimationFrame(async () => {
             if (!added.querySelector(".comfy-context-menu-filter")) {
+              node.__easyuseAnimaOpeningLoraMenu = false;
               return;
             }
             await loadLoraPreviewImages();
             updateLoraNameComboMenu(added, imageHost);
+            node.__easyuseAnimaOpeningLoraMenu = false;
           });
           return;
         }
