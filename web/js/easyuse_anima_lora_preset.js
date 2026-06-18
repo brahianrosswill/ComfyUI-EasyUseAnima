@@ -12,12 +12,12 @@ const WIDGET_INDEX = {
   profileData: 5,
 };
 const MIN_NODE_WIDTH = 460;
-const LORA_ROW_HEIGHT = 28;
 const LORA_STRENGTH_STEP = 0.05;
-const LORA_PANEL_PADDING = 10;
-const LORA_PANEL_HEADER_HEIGHT = 34;
-const LORA_PANEL_ROW_HEIGHT = 34;
-const LORA_PANEL_ADD_HEIGHT = 38;
+const PROFILE_BAR_HEIGHT = 30;
+const LORA_PANEL_PADDING = 6;
+const LORA_PANEL_HEADER_HEIGHT = 24;
+const LORA_PANEL_ROW_HEIGHT = 24;
+const LORA_PANEL_ADD_HEIGHT = 34;
 const PREVIEW_IMAGE_WIDTH = 384;
 const PREVIEW_IMAGE_HEIGHT = 384;
 let rgthreeInfoDialogPromise = null;
@@ -776,7 +776,7 @@ class EasyUseAnimaLoraPanelWidget {
 
   computeSize(width) {
     const rows = this.node ? lorasWidgetValue(this.node).length : 0;
-    return [width, LORA_PANEL_PADDING * 2 + LORA_PANEL_HEADER_HEIGHT + rows * LORA_PANEL_ROW_HEIGHT + LORA_PANEL_ADD_HEIGHT + 12];
+    return [width, LORA_PANEL_HEADER_HEIGHT + rows * LORA_PANEL_ROW_HEIGHT + LORA_PANEL_ADD_HEIGHT + 4];
   }
 
   draw(ctx, node, width, y, height) {
@@ -785,76 +785,70 @@ class EasyUseAnimaLoraPanelWidget {
     this.rowHitAreas = [];
     const loras = lorasWidgetValue(node);
     const pad = LORA_PANEL_PADDING;
-    const panelX = pad;
-    const panelY = y + 4;
-    const panelW = width - pad * 2;
-    const panelH = LORA_PANEL_HEADER_HEIGHT + loras.length * LORA_PANEL_ROW_HEIGHT + LORA_PANEL_ADD_HEIGHT + pad * 2;
+    const panelX = 8;
+    const panelY = y + 2;
+    const panelW = width - 16;
     const allActive = loras.length > 0 && loras.every((lora) => lora.active !== false);
 
     ctx.save();
-    ctx.fillStyle = "rgba(38, 42, 51, 0.92)";
-    ctx.beginPath();
-    roundedRect(ctx, panelX, panelY, panelW, panelH, 7);
-    ctx.fill();
-
-    const toggleSize = 24;
-    const headerY = panelY + pad;
-    this.hitAreas.toggleAll = [panelX + pad, headerY + 5, toggleSize, toggleSize];
+    const toggleSize = 18;
+    const headerY = panelY;
+    this.hitAreas.toggleAll = [panelX + 2, headerY + 4, toggleSize, toggleSize];
     ctx.fillStyle = allActive ? "#8fa1c9" : "#4b4f57";
     ctx.beginPath();
     roundedRect(ctx, ...this.hitAreas.toggleAll, 4);
     ctx.fill();
 
     ctx.fillStyle = LiteGraph.WIDGET_TEXT_COLOR;
-    ctx.font = "18px sans-serif";
+    ctx.font = "16px sans-serif";
     ctx.textAlign = "left";
     ctx.textBaseline = "middle";
-    ctx.fillText("Toggle All", panelX + pad + toggleSize + 12, headerY + LORA_PANEL_HEADER_HEIGHT / 2);
+    ctx.fillText("Toggle All", panelX + toggleSize + 12, headerY + LORA_PANEL_HEADER_HEIGHT / 2);
     ctx.textAlign = "right";
-    ctx.fillText("Strength", panelX + panelW - pad, headerY + LORA_PANEL_HEADER_HEIGHT / 2);
+    ctx.fillText("Strength", panelX + panelW - 2, headerY + LORA_PANEL_HEADER_HEIGHT / 2);
 
     let rowY = headerY + LORA_PANEL_HEADER_HEIGHT;
     for (let index = 0; index < loras.length; index += 1) {
       const lora = loras[index] || {};
       const active = lora.active !== false;
-      const rowX = panelX + pad;
-      const rowW = panelW - pad * 2;
+      const rowX = panelX;
+      const rowW = panelW;
       const rowH = LORA_PANEL_ROW_HEIGHT - 4;
       const midY = rowY + rowH / 2;
       const right = rowX + rowW;
-      const toggleW = 28;
-      const infoW = 28;
-      const arrowW = 26;
-      const valueW = 54;
-      const deleteW = 22;
+      const toggleW = 20;
+      const infoW = 22;
+      const arrowW = 20;
+      const valueW = 42;
+      const deleteW = 18;
       const areas = {
-        toggle: [rowX + 6, rowY + 7, toggleW, 18],
+        toggle: [rowX + 5, rowY + 6, toggleW, 13],
         info: [right - deleteW - arrowW * 2 - valueW - infoW - 10, rowY + 4, infoW, rowH - 4],
         dec: [right - deleteW - arrowW * 2 - valueW, rowY + 4, arrowW, rowH - 4],
         value: [right - deleteW - arrowW - valueW, rowY + 4, valueW, rowH - 4],
         inc: [right - deleteW - arrowW, rowY + 4, arrowW, rowH - 4],
         delete: [right - deleteW, rowY + 4, deleteW, rowH - 4],
       };
-      const nameX = areas.toggle[0] + toggleW + 12;
+      const nameX = areas.toggle[0] + toggleW + 9;
       const nameW = areas.info[0] - nameX - 8;
       this.rowHitAreas[index] = areas;
 
       ctx.globalAlpha = active ? 1 : 0.45;
-      ctx.fillStyle = "rgba(56, 67, 90, 0.55)";
+      ctx.fillStyle = "rgba(48, 53, 63, 0.65)";
       ctx.beginPath();
-      roundedRect(ctx, rowX, rowY + 2, rowW, rowH, 8);
+      roundedRect(ctx, rowX, rowY + 1, rowW, rowH, rowH / 2);
       ctx.fill();
       ctx.fillStyle = active ? "#8fa1c9" : "#555";
       ctx.beginPath();
-      roundedRect(ctx, ...areas.toggle, 8);
+      roundedRect(ctx, ...areas.toggle, 7);
       ctx.fill();
 
       ctx.fillStyle = LiteGraph.WIDGET_TEXT_COLOR;
-      ctx.font = "18px sans-serif";
+      ctx.font = "15px sans-serif";
       ctx.textAlign = "left";
       ctx.fillText(fitCanvasText(ctx, lora.name || "None", nameW), nameX, midY);
       ctx.textAlign = "center";
-      ctx.font = "17px sans-serif";
+      ctx.font = "14px sans-serif";
       ctx.fillText("ⓘ", areas.info[0] + infoW / 2, midY);
       ctx.fillText("◀", areas.dec[0] + arrowW / 2, midY);
       ctx.fillText(formatStrength(lora.strength ?? 1), areas.value[0] + valueW / 2, midY);
@@ -864,8 +858,8 @@ class EasyUseAnimaLoraPanelWidget {
       rowY += LORA_PANEL_ROW_HEIGHT;
     }
 
-    const addY = rowY + 6;
-    this.hitAreas.add = [panelX + pad, addY, panelW - pad * 2, LORA_PANEL_ADD_HEIGHT - 8];
+    const addY = rowY + 5;
+    this.hitAreas.add = [panelX, addY, panelW, LORA_PANEL_ADD_HEIGHT - 8];
     ctx.strokeStyle = "rgba(180, 180, 185, 0.5)";
     ctx.fillStyle = "rgba(30, 31, 35, 0.6)";
     ctx.beginPath();
@@ -873,7 +867,7 @@ class EasyUseAnimaLoraPanelWidget {
     ctx.fill();
     ctx.stroke();
     ctx.fillStyle = LiteGraph.WIDGET_TEXT_COLOR;
-    ctx.font = "18px sans-serif";
+    ctx.font = "15px sans-serif";
     ctx.textAlign = "center";
     ctx.fillText("+ Add Lora", panelX + panelW / 2, addY + (LORA_PANEL_ADD_HEIGHT - 8) / 2);
     ctx.restore();
@@ -954,6 +948,92 @@ class EasyUseAnimaLoraPanelWidget {
   }
 }
 
+class EasyUseAnimaProfileBarWidget {
+  constructor() {
+    this.name = "easyuse_anima_profile_bar";
+    this.type = "custom";
+    this.options = { serialize: false };
+    this.serialize = false;
+    this.__easyuseAnimaControlWidget = true;
+    this.hitAreas = [];
+    this.node = null;
+  }
+
+  computeSize(width) {
+    return [width, PROFILE_BAR_HEIGHT];
+  }
+
+  draw(ctx, node, width, y) {
+    this.node = node;
+    this.hitAreas = [];
+    const active = activeProfileIndex(node);
+    const count = profileCount(node);
+    const x = 8;
+    const buttonH = 22;
+    const gap = 4;
+    let cursorX = x;
+    const buttonY = y + 3;
+
+    ctx.save();
+    ctx.font = "13px sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+
+    const drawButton = (id, label, buttonW, selected = false, disabled = false) => {
+      if (cursorX + buttonW > width - 8) {
+        return;
+      }
+      const area = [cursorX, buttonY, buttonW, buttonH, id, disabled];
+      this.hitAreas.push(area);
+      ctx.globalAlpha = disabled ? 0.45 : 1;
+      ctx.fillStyle = selected ? "#3f79d8" : "rgba(32, 33, 37, 0.9)";
+      ctx.strokeStyle = selected ? "#6fa2ff" : "rgba(160, 160, 165, 0.45)";
+      ctx.beginPath();
+      roundedRect(ctx, cursorX, buttonY, buttonW, buttonH, 4);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = LiteGraph.WIDGET_TEXT_COLOR;
+      ctx.fillText(label, cursorX + buttonW / 2, buttonY + buttonH / 2);
+      ctx.globalAlpha = 1;
+      cursorX += buttonW + gap;
+    };
+
+    for (let index = 1; index <= count; index += 1) {
+      drawButton(`profile:${index}`, String(index), 26, index === active);
+    }
+    drawButton("add", "+", 28);
+    drawButton("rename", "R", 28);
+    drawButton("delete", "X", 28, false, count <= 1);
+    ctx.restore();
+  }
+
+  mouse(event, pos, node) {
+    if (event.type !== "pointerdown" || event.button !== 0) {
+      return false;
+    }
+    for (const [x, y, width, height, id, disabled] of this.hitAreas) {
+      if (disabled) {
+        continue;
+      }
+      const hit = pos[0] >= x && pos[0] <= x + width && pos[1] >= y && pos[1] <= y + height;
+      if (!hit) {
+        continue;
+      }
+      if (id === "add") {
+        addProfile(node);
+      } else if (id === "rename") {
+        renameProfile(node, activeProfileIndex(node));
+      } else if (id === "delete") {
+        deleteProfile(node, activeProfileIndex(node));
+      } else if (String(id).startsWith("profile:")) {
+        switchProfile(node, Number.parseInt(String(id).slice(8), 10));
+      }
+      return true;
+    }
+    return false;
+  }
+}
+
 function renderLoraRows(node) {
   if (!node.widgets) {
     return;
@@ -965,84 +1045,26 @@ function renderLoraRows(node) {
   enforceNodeLayout(node);
 }
 
-function profileOptions(node) {
-  const count = profileCount(node);
-  const options = [];
-  for (let index = 1; index <= count; index += 1) {
-    options.push(`${index}. ${profileLabel(node, index)}`);
-  }
-  return options;
-}
-
-function profileOptionIndex(value) {
-  const match = String(value || "").match(/^(\d+)\./);
-  return Math.max(1, Number.parseInt(match?.[1] || "1", 10) || 1);
-}
-
 function renderTabs(node) {
-  const selector = node.__easyuseAnimaProfileSelector;
-  if (!selector) {
-    return;
-  }
-  const options = profileOptions(node);
-  selector.options.values = options;
-  const selectedLabel = options[activeProfileIndex(node) - 1] || options[0] || defaultProfileName(1);
-  node.__easyuseAnimaSuppressProfileSelectorCallback = true;
-  try {
-    selector.value = selectedLabel;
-  } finally {
-    node.__easyuseAnimaSuppressProfileSelectorCallback = false;
-  }
-  const deleteButton = node.__easyuseAnimaDeleteProfileButton;
-  if (deleteButton) {
-    deleteButton.disabled = profileCount(node) <= 1;
+  if (node.__easyuseAnimaProfileBar) {
+    node.__easyuseAnimaProfileBar.node = node;
   }
   enforceNodeLayout(node);
 }
 
 function ensureTabsWidget(node) {
-  if (node.__easyuseAnimaProfileSelector || typeof node.addWidget !== "function") {
+  if (node.__easyuseAnimaProfileBar || !node.widgets) {
     return;
   }
-  const selector = node.addWidget(
-    "combo",
-    "profile",
-    profileOptions(node)[activeProfileIndex(node) - 1] || defaultProfileName(1),
-    (value) => {
-      if (node.__easyuseAnimaSuppressProfileSelectorCallback) {
-        return;
-      }
-      switchProfile(node, profileOptionIndex(value));
-    },
-    { values: profileOptions(node) },
-  );
-  selector.serialize = false;
-  node.__easyuseAnimaProfileSelector = selector;
-
-  const addButton = node.addWidget("button", "add_profile", "+", () => addProfile(node));
-  addButton.serialize = false;
-
-  const renameButton = node.addWidget("button", "rename_profile", "Rename", () => {
-    renameProfile(node, activeProfileIndex(node));
-  });
-  renameButton.serialize = false;
-
-  const deleteButton = node.addWidget("button", "delete_profile", "Delete", () => {
-    deleteProfile(node, activeProfileIndex(node));
-  });
-  deleteButton.serialize = false;
-  node.__easyuseAnimaDeleteProfileButton = deleteButton;
-
-  for (const widget of [selector, addButton, renameButton, deleteButton]) {
-    if (widget) {
-      widget.__easyuseAnimaControlWidget = true;
-    }
-  }
-  const controls = [selector, addButton, renameButton, deleteButton].filter(Boolean);
+  const profileBar = new EasyUseAnimaProfileBarWidget();
+  profileBar.node = node;
+  node.__easyuseAnimaProfileBar = profileBar;
+  node.widgets = node.widgets.filter((widget) => !widget.__easyuseAnimaControlWidget);
   const insertBeforeIndex = node.widgets?.findIndex((widget) => widget.name === "lora_name" || widget.name === "loras") ?? -1;
-  if (insertBeforeIndex >= 0 && controls.length) {
-    node.widgets = node.widgets.filter((widget) => !widget.__easyuseAnimaControlWidget);
-    node.widgets.splice(insertBeforeIndex, 0, ...controls);
+  if (insertBeforeIndex >= 0) {
+    node.widgets.splice(insertBeforeIndex, 0, profileBar);
+  } else {
+    node.widgets.push(profileBar);
   }
   renderTabs(node);
   renderLoraRows(node);
