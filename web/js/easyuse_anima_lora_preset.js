@@ -539,7 +539,6 @@ function openProfileMenu(node, anchor) {
   const count = profileCount(node);
   const selected = activeProfileIndex(node);
   const rect = anchor.getBoundingClientRect();
-  const openedAt = Date.now();
   const menu = document.createElement("div");
   menu.style.position = "fixed";
   menu.style.left = `${rect.left}px`;
@@ -586,9 +585,6 @@ function openProfileMenu(node, anchor) {
   }
 
   const closeHandler = (event) => {
-    if (Date.now() - openedAt < 160) {
-      return;
-    }
     const path = typeof event.composedPath === "function" ? event.composedPath() : [];
     if (event.target === anchor || menu.contains(event.target) || path.includes(anchor) || path.includes(menu)) {
       return;
@@ -597,9 +593,7 @@ function openProfileMenu(node, anchor) {
   };
   document.body.appendChild(menu);
   node.__easyuseAnimaProfileMenu = { menu, closeHandler };
-  window.requestAnimationFrame(() => {
-    document.addEventListener("pointerdown", closeHandler, true);
-  });
+  document.addEventListener("pointerdown", closeHandler, true);
 }
 
 function renderTabs(node) {
