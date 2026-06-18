@@ -1,4 +1,5 @@
 import { app } from "../../../scripts/app.js";
+import { api } from "../../../scripts/api.js";
 
 const NODE_TYPE = "EasyUseAnimaLoraPreset";
 const MAX_PROFILES = 16;
@@ -14,7 +15,11 @@ const MIN_NODE_WIDTH = 460;
 const LORA_ROW_HEIGHT = 28;
 const LORA_STRENGTH_STEP = 0.05;
 const LORA_HEADER_HEIGHT = 30;
+const PREVIEW_IMAGE_WIDTH = 384;
+const PREVIEW_IMAGE_HEIGHT = 384;
 let rgthreeInfoDialogPromise = null;
+let loraPreviewImages = {};
+let loraPreviewImagesPromise = null;
 
 async function loadRgthreeInfoDialog() {
   if (!rgthreeInfoDialogPromise) {
@@ -26,6 +31,43 @@ async function loadRgthreeInfoDialog() {
       });
   }
   return rgthreeInfoDialogPromise;
+}
+
+function encodeRFC3986URIComponent(value) {
+  return encodeURIComponent(value).replace(/[!'()*]/g, (char) => `%${char.charCodeAt(0).toString(16).toUpperCase()}`);
+}
+
+async function loadLoraPreviewImages() {
+  if (!loraPreviewImagesPromise) {
+    loraPreviewImagesPromise = api.fetchApi("/pysssss/images/loras")
+      .then((response) => response.ok ? response.json() : {})
+      .then((images) => {
+        loraPreviewImages = images && typeof images === "object" ? images : {};
+        return loraPreviewImages;
+      })
+      .catch(() => {
+        loraPreviewImages = {};
+        return loraPreviewImages;
+      });
+  }
+  return loraPreviewImagesPromise;
+}
+
+function createEl(tagName, options = {}) {
+  const element = document.createElement(tagName);
+  if (options.className) {
+    element.className = options.className;
+  }
+  if (options.textContent != null) {
+    element.textContent = options.textContent;
+  }
+  if (options.innerHTML != null) {
+    element.innerHTML = options.innerHTML;
+  }
+  if (options.style) {
+    Object.assign(element.style, options.style);
+  }
+  return element;
 }
 
 function findWidget(node, name) {
@@ -516,6 +558,139 @@ function roundedRect(ctx, x, y, width, height, radius) {
   ctx.quadraticCurveTo(x, y, x + r, y);
 }
 
+function positionComboMenu(menu) {
+  const mouse = app.canvas?.last_mouse || [window.innerWidth / 2, window.innerHeight / 2];
+  let left = Number(mouse[0] || 0) - 10;
+  let top = Number(mouse[1] || 0) - 10;
+  const bodyRect = document.body.getBoundingClientRect();
+  const menuRect = menu.getBoundingClientRect();
+
+  if (bodyRect.width && left > bodyRect.width - menuRect.width - 10) {
+    left = bodyRect.width - menuRect.width - 10;
+  }
+  if (bodyRect.height && top > bodyRect.height - menuRect.height - 10) {
+    top = bodyRect.height - menuRect.height - 10;
+  }
+  menu.style.left = `${Math.max(0, left)}px`;
+  menu.style.top = `${Math.max(0, top)}px`;
+}
+
+function calculateImagePosition(relativeToEl, imageEl) {
+  let { top, left, right } = relativeToEl.getBoundingClientRect();
+  const bodyRect = document.body.getBoundingClientRect();
+  const isSpaceRight = right + PREVIEW_IMAGE_WIDTH <= bodyRect.width;
+  left = isSpaceRight ? right : left - PREVIEW_IMAGE_WIDTH;
+  top -= PREVIEW_IMAGE_HEIGHT / 2;
+  if (top + PREVIEW_IMAGE_HEIGHT > bodyRect.height) {
+    top = bodyRect.height - PREVIEW_IMAGE_HEIGHT;
+  }
+  if (top < 0) {
+    top = 0;
+  }
+  imageEl.style.left = `${Math.round(left)}px`;
+  imageEl.style.top = `${Math.round(top)}px`;
+  imageEl.classList.toggle("left", !isSpaceRight);
+}
+
+function addLoraPreviewHandler(item, imageHost) {
+  const value = item.getAttribute("data-value")?.trim();
+  const image = value ? loraPreviewImages[value] : null;
+  if (!image) {
+    return;
+  }
+  item.appendChild(document.createTextNode("*"));
+  item.addEventListener("mouseover", () => {
+    imageHost.src = `/pysssss/view/${encodeRFC3986URIComponent(image)}?${Date.now()}`;
+    document.body.appendChild(imageHost);
+    calculateImagePosition(item, imageHost);
+  }, { passive: true });
+  item.addEventListener("mouseout", () => imageHost.remove(), { passive: true });
+  item.addEventListener("click", () => imageHost.remove(), { passive: true });
+}
+
+function updateLoraNameComboMenu(menu, imageHost) {
+  const position = menu.getBoundingClientRect();
+  menu.style.maxHeight = `${Math.max(120, window.innerHeight - position.top - 20)}px`;
+
+  const items = Array.from(menu.querySelectorAll(".litemenu-entry"));
+  const folderMap = new Map();
+  const itemsSymbol = Symbol("items");
+  const splitBy = (navigator.platform || navigator.userAgent).includes("Win") ? /\/|\\/ : /\//;
+
+  for (const item of items) {
+    const value = item.getAttribute("data-value")?.trim();
+    if (!value) {
+      continue;
+    }
+    const path = value.split(splitBy);
+    item.textContent = path[path.length - 1];
+    if (path.length > 1) {
+      const prefix = createEl("span", {
+        className: "easyuse-anima-combo-prefix",
+        textContent: `${path.slice(0, -1).join("/")}/`,
+      });
+      item.prepend(prefix);
+    }
+    addLoraPreviewHandler(item, imageHost);
+    if (path.length === 1) {
+      continue;
+    }
+    item.remove();
+    let currentLevel = folderMap;
+    for (let index = 0; index < path.length - 1; index += 1) {
+      const folder = path[index];
+      if (!currentLevel.has(folder)) {
+        currentLevel.set(folder, new Map());
+      }
+      currentLevel = currentLevel.get(folder);
+    }
+    if (!currentLevel.has(itemsSymbol)) {
+      currentLevel.set(itemsSymbol, []);
+    }
+    currentLevel.get(itemsSymbol).push(item);
+  }
+
+  const parentElement = items[0]?.parentElement || menu;
+  const createFolderElement = (name, level) => createEl("div", {
+    className: "litemenu-entry easyuse-anima-combo-folder",
+    innerHTML: `<span class="easyuse-anima-combo-folder-arrow">▶</span> ${name}`,
+    style: { paddingLeft: `${level * 10 + 5}px` },
+  });
+
+  const insertFolderStructure = (parent, map, level = 0) => {
+    for (const [folderName, content] of map.entries()) {
+      if (folderName === itemsSymbol) {
+        continue;
+      }
+      const folderElement = createFolderElement(folderName, level);
+      const childContainer = createEl("div", {
+        className: "easyuse-anima-combo-folder-contents",
+        style: { display: "none" },
+      });
+      const childItems = content.get(itemsSymbol) || [];
+      for (const item of childItems) {
+        item.style.paddingLeft = `${(level + 1) * 10 + 14}px`;
+        childContainer.appendChild(item);
+      }
+      insertFolderStructure(childContainer, content, level + 1);
+      folderElement.addEventListener("click", (event) => {
+        event.stopPropagation();
+        const arrow = folderElement.querySelector(".easyuse-anima-combo-folder-arrow");
+        const isClosed = childContainer.style.display === "none";
+        childContainer.style.display = isClosed ? "block" : "none";
+        if (arrow) {
+          arrow.textContent = isClosed ? "▼" : "▶";
+        }
+      });
+      parent.appendChild(folderElement);
+      parent.appendChild(childContainer);
+    }
+  };
+
+  insertFolderStructure(parentElement, folderMap);
+  positionComboMenu(menu);
+}
+
 class EasyUseAnimaLoraRowWidget {
   constructor(index) {
     this.name = `easyuse_anima_lora_${index}`;
@@ -903,6 +1078,93 @@ function initializeNode(node) {
 
 app.registerExtension({
   name: "EasyUseAnima.LoraPreset",
+  init() {
+    document.head.appendChild(createEl("style", {
+      textContent: `
+        .easyuse-anima-combo-image {
+          position: absolute;
+          left: 0;
+          top: 0;
+          width: ${PREVIEW_IMAGE_WIDTH}px;
+          height: ${PREVIEW_IMAGE_HEIGHT}px;
+          object-fit: contain;
+          object-position: top left;
+          z-index: 9999;
+          pointer-events: none;
+        }
+        .easyuse-anima-combo-image.left {
+          object-position: top right;
+        }
+        .easyuse-anima-combo-folder {
+          opacity: 0.72;
+        }
+        .easyuse-anima-combo-folder-arrow {
+          display: inline-block;
+          width: 15px;
+        }
+        .easyuse-anima-combo-folder:hover {
+          background-color: rgba(255, 255, 255, 0.1);
+        }
+        .easyuse-anima-combo-prefix {
+          display: none;
+        }
+        .litecontextmenu:has(input:not(:placeholder-shown)) .easyuse-anima-combo-folder-contents {
+          display: block !important;
+        }
+        .litecontextmenu:has(input:not(:placeholder-shown)) .easyuse-anima-combo-folder {
+          display: none;
+        }
+        .litecontextmenu:has(input:not(:placeholder-shown)) .easyuse-anima-combo-prefix {
+          display: inline;
+        }
+        .litecontextmenu:has(input:not(:placeholder-shown)) .litemenu-entry {
+          padding-left: 2px !important;
+        }
+      `,
+    }));
+
+    loadLoraPreviewImages();
+    const refreshComboInNodes = app.refreshComboInNodes;
+    app.refreshComboInNodes = async function (...args) {
+      const result = await refreshComboInNodes?.apply(this, args);
+      loraPreviewImagesPromise = null;
+      await loadLoraPreviewImages();
+      return result;
+    };
+
+    const imageHost = createEl("img", { className: "easyuse-anima-combo-image" });
+    const observer = new MutationObserver((mutations) => {
+      const node = app.canvas?.current_node;
+      if (!node || node.comfyClass !== NODE_TYPE) {
+        return;
+      }
+      for (const mutation of mutations) {
+        for (const removed of mutation.removedNodes) {
+          if (removed.classList?.contains("litecontextmenu")) {
+            imageHost.remove();
+          }
+        }
+        for (const added of mutation.addedNodes) {
+          if (!added.classList?.contains("litecontextmenu")) {
+            continue;
+          }
+          const overWidget = app.canvas?.getWidgetAtCursor?.();
+          if (overWidget?.name !== "lora_name") {
+            continue;
+          }
+          requestAnimationFrame(async () => {
+            if (!added.querySelector(".comfy-context-menu-filter")) {
+              return;
+            }
+            await loadLoraPreviewImages();
+            updateLoraNameComboMenu(added, imageHost);
+          });
+          return;
+        }
+      }
+    });
+    observer.observe(document.body, { childList: true, subtree: false });
+  },
   async beforeRegisterNodeDef(nodeType, nodeData) {
     if (nodeData.name !== NODE_TYPE) {
       return;
