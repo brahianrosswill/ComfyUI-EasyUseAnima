@@ -439,8 +439,8 @@ function ensureExtendSlotStyle() {
   document.head.append(style);
 }
 
-function refreshNodeSize(node) {
-  requestAnimationFrame(() => {
+function refreshNodeSize(node, options = {}) {
+  const update = () => {
     const size = node.computeSize();
     const width = Math.max(size[0], node.size?.[0] || size[0]);
     const height = Math.max(size[1], 80);
@@ -451,7 +451,12 @@ function refreshNodeSize(node) {
       node.setSize?.([width, height]);
     }
     app.graph.setDirtyCanvas(true, true);
-  });
+  };
+  if (options.immediate) {
+    update();
+  } else {
+    requestAnimationFrame(update);
+  }
 }
 
 function debounce(fn, delay = 180) {
@@ -815,17 +820,32 @@ function ensureHighlightOverlay(input) {
   return overlay;
 }
 
-function desiredTextareaHeight(input, currentHeight, minimumHeight) {
-  const scrollHeight = Math.ceil(Number(input?.scrollHeight) || 0);
+function textareaContentHeight(input, minimumHeight) {
+  if (!input) {
+    return minimumHeight;
+  }
+  const previousHeight = input.style.height;
+  const previousOverflow = input.style.overflowY;
+  input.style.height = "auto";
+  input.style.overflowY = "hidden";
+  const contentHeight = Math.ceil(Number(input.scrollHeight) || 0);
+  input.style.height = previousHeight;
+  input.style.overflowY = previousOverflow;
+  return Math.max(minimumHeight, contentHeight);
+}
+
+function desiredTextareaHeight(input, currentHeight, minimumHeight, options = {}) {
+  const includeCurrent = options.includeCurrent !== false;
+  const contentHeight = textareaContentHeight(input, minimumHeight);
   return Math.max(
     minimumHeight,
-    Math.round(Number(currentHeight) || 0),
-    scrollHeight,
+    includeCurrent ? Math.round(Number(currentHeight) || 0) : 0,
+    contentHeight,
   );
 }
 
 function studioMinimumHeight(widget, input = findInputEl(widget)) {
-  return desiredTextareaHeight(input, 0, Math.min(studioDefaultHeight(widget), 54));
+  return desiredTextareaHeight(input, 0, Math.min(studioDefaultHeight(widget), 54), { includeCurrent: false });
 }
 
 function studioCurrentHeight(widget, input = findInputEl(widget)) {
@@ -865,8 +885,9 @@ function expandStudioInputToContent(node, widget, refresh = false) {
   }
   const height = desiredTextareaHeight(
     input,
-    studioCurrentHeight(widget, input),
+    0,
     Math.min(studioDefaultHeight(widget), 54),
+    { includeCurrent: false },
   );
   setStudioInputHeight(node, widget, height, refresh);
 }
@@ -902,14 +923,14 @@ function rebalanceStudioInputHeights(node) {
       const nextHeight = minimumHeights[index] + (currentHeights[index] - minimumHeights[index]) * ratio;
       setStudioInputHeight(node, widget, nextHeight);
     }
-    refreshNodeSize(node);
+    refreshNodeSize(node, { immediate: true });
     return;
   }
 
   for (const widget of widgets) {
     expandStudioInputToContent(node, widget);
   }
-  refreshNodeSize(node);
+  refreshNodeSize(node, { immediate: true });
 }
 
 function desiredLegendHeight() {
