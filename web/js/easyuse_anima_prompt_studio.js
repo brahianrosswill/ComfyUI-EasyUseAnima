@@ -1048,9 +1048,52 @@ function syncAdvancedFieldsBackup(node, value) {
   node.properties[ADVANCED_FIELDS_PROPERTY] = String(value || "");
 }
 
+function normalizeAdvancedFieldsValue(value) {
+  if (value == null) {
+    return "";
+  }
+  try {
+    const parsed = typeof value === "string" ? JSON.parse(value || "[]") : value;
+    if (!Array.isArray(parsed) || !parsed.length) {
+      return "";
+    }
+    return JSON.stringify(parsed.map((field, index) => normalizeAdvancedField(field, index)));
+  } catch {
+    return "";
+  }
+}
+
+function serializedAdvancedFieldsValue(serialized) {
+  const propertyValue = normalizeAdvancedFieldsValue(serialized?.properties?.[ADVANCED_FIELDS_PROPERTY]);
+  if (propertyValue) {
+    return propertyValue;
+  }
+  const widgetsValue = normalizeAdvancedFieldsValue(serialized?.widgets_values?.[ADVANCED_WIDGET_INDEX.advanced_fields]);
+  return widgetsValue || "";
+}
+
+function captureAdvancedConfigure(node, serialized) {
+  const value = serializedAdvancedFieldsValue(serialized);
+  if (!value) {
+    return;
+  }
+  node.__easyuseAnimaPendingAdvancedFieldsValue = value;
+  syncAdvancedFieldsBackup(node, value);
+  const widget = advancedWidget(node);
+  if (widget) {
+    widget.value = value;
+  }
+}
+
 function ensureAdvancedWidgetValue(node) {
   const widget = advancedWidget(node);
   if (!widget) {
+    return;
+  }
+  if (node.__easyuseAnimaPendingAdvancedFieldsValue) {
+    widget.value = node.__easyuseAnimaPendingAdvancedFieldsValue;
+    syncAdvancedFieldsBackup(node, widget.value);
+    delete node.__easyuseAnimaPendingAdvancedFieldsValue;
     return;
   }
   const backup = advancedFieldsBackup(node);
@@ -1820,16 +1863,17 @@ app.registerExtension({
     nodeType.prototype.onNodeCreated = function () {
       onNodeCreated?.apply(this, arguments);
       if (nodeData.name === ADVANCED_NODE_TYPE) {
-        hookAdvancedNode(this);
+        requestAnimationFrame(() => hookAdvancedNode(this));
       } else {
         hookStudioNode(this);
       }
     };
 
     const onConfigure = nodeType.prototype.onConfigure;
-    nodeType.prototype.onConfigure = function () {
+    nodeType.prototype.onConfigure = function (serialized) {
       onConfigure?.apply(this, arguments);
       if (nodeData.name === ADVANCED_NODE_TYPE) {
+        captureAdvancedConfigure(this, serialized);
         requestAnimationFrame(() => hookAdvancedNode(this));
       } else {
         hookStudioNode(this);
