@@ -394,16 +394,50 @@ function profilePayload(node) {
   };
 }
 
-function applyProfilePayload(node, payload) {
+function appendProfilePayload(node, payload) {
+  saveCurrentProfile(node);
   const profile = payload?.profile || payload || {};
-  const count = Math.max(1, Math.min(MAX_PROFILES, Number.parseInt(profile.profile_count, 10) || 1));
-  const data = normalizeProfileDataValue(profile.profile_data);
-  const index = wrapProfileIndex(profile.profile_index || 1, count);
-  setProfileCount(node, count);
+  const incomingData = normalizeProfileDataValue(profile.profile_data);
+  const incomingCount = Math.max(
+    1,
+    Math.min(
+      MAX_PROFILES,
+      Number.parseInt(profile.profile_count, 10) || Object.keys(incomingData).length || 1,
+    ),
+  );
+  const currentCount = profileCount(node);
+  const available = MAX_PROFILES - currentCount;
+  if (available <= 0) {
+    window.alert(`Cannot load more profiles. The maximum is ${MAX_PROFILES}.`);
+    return;
+  }
+  const appendCount = Math.min(incomingCount, available);
+  const targetStart = currentCount + 1;
+  const data = parseProfileData(findWidget(node, "profile_data"));
+  for (let offset = 0; offset < appendCount; offset += 1) {
+    const sourceIndex = offset + 1;
+    const targetIndex = targetStart + offset;
+    const sourceProfile = incomingData[profileKey(sourceIndex)] || emptyProfile(sourceIndex);
+    data[profileKey(targetIndex)] = {
+      style_prompt: String(sourceProfile.style_prompt || ""),
+      loras: Array.isArray(sourceProfile.loras)
+        ? sourceProfile.loras.map(normalizeLoraEntry).filter((entry) => entry.name)
+        : [],
+    };
+  }
+  if (appendCount < incomingCount) {
+    window.alert(`Only ${appendCount} profile(s) were loaded because the maximum is ${MAX_PROFILES}.`);
+  }
+  const sourceSelectedIndex = Math.min(
+    appendCount,
+    wrapProfileIndex(profile.profile_index || 1, incomingCount),
+  );
+  const nextIndex = targetStart + sourceSelectedIndex - 1;
+  setProfileCount(node, currentCount + appendCount);
   writeProfileData(findWidget(node, "profile_data"), data);
-  setProfileIndex(node, index);
-  node.__easyuseAnimaActiveProfileIndex = index;
-  loadProfile(node, index);
+  setProfileIndex(node, nextIndex);
+  node.__easyuseAnimaActiveProfileIndex = nextIndex;
+  loadProfile(node, nextIndex);
   renderProfileBar(node);
   renderLoraWidgets(node);
   node.setDirtyCanvas?.(true, true);
@@ -436,7 +470,7 @@ async function saveProfileSet(node) {
 async function loadProfileSet(node, name) {
   try {
     const data = await fetchJson(`/easyuse_anima/lora_profiles/load?name=${encodeRFC3986URIComponent(name)}`);
-    applyProfilePayload(node, data.profile);
+    appendProfilePayload(node, data.profile);
   } catch (error) {
     window.alert(`Failed to load profile: ${error.message || error}`);
   }
