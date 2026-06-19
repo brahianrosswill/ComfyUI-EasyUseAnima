@@ -903,13 +903,34 @@ function syncStudioOverflow(widget) {
   }
 }
 
+function growStudioManualHeightToContent(node, widget, refresh = false) {
+  const input = findInputEl(widget);
+  if (!input || !widget.__easyuseAnimaManualHeight || widget.__easyuseAnimaExtendHidden) {
+    return false;
+  }
+  const currentHeight = studioCurrentHeight(widget, input);
+  const contentHeight = studioContentHeight(widget, input);
+  if (contentHeight > currentHeight + 2) {
+    setStudioInputHeight(node, widget, contentHeight, refresh);
+    return true;
+  }
+  syncStudioOverflow(widget);
+  updateHighlight(node, widget);
+  return false;
+}
+
 function setStudioManualHeight(node, widget) {
   const input = findInputEl(widget);
   if (!input || widget.__easyuseAnimaExtendHidden) {
     return;
   }
   widget.__easyuseAnimaManualHeight = true;
-  setStudioInputHeight(node, widget, studioCurrentHeight(widget, input), "immediate");
+  setStudioInputHeight(
+    node,
+    widget,
+    Math.max(studioCurrentHeight(widget, input), studioContentHeight(widget, input)),
+    "immediate",
+  );
 }
 
 function expandStudioInputToContent(node, widget, refresh = false) {
@@ -918,8 +939,7 @@ function expandStudioInputToContent(node, widget, refresh = false) {
     return;
   }
   if (widget.__easyuseAnimaManualHeight) {
-    syncStudioOverflow(widget);
-    updateHighlight(node, widget);
+    growStudioManualHeightToContent(node, widget, refresh);
     return;
   }
   const height = studioContentHeight(widget, input);
@@ -1234,9 +1254,9 @@ function enhanceResizableInput(node, widget) {
 
   const syncHeight = () => {
     if (widget.__easyuseAnimaManualHeight) {
-      syncStudioOverflow(widget);
-      updateHighlight(node, widget);
-      refreshNodeSize(node, { immediate: true });
+      if (!growStudioManualHeightToContent(node, widget, "immediate")) {
+        refreshNodeSize(node, { immediate: true });
+      }
       return;
     }
     const height = desiredTextareaHeight(input, 0, minimumHeight, { includeCurrent: false });
