@@ -294,6 +294,39 @@ class PromptBuilderTests(unittest.TestCase):
         self.assertEqual(normalized[0]["pane"], "negative")
         self.assertEqual(normalized[0]["type"], "general")
 
+    def test_prompt_studio_advanced_disabled_field_is_skipped(self):
+        fields = [
+            {
+                "id": "enabled",
+                "pane": "positive",
+                "type": "general",
+                "label": "General Tags",
+                "text": "1girl",
+                "height": 72,
+                "enabled": True,
+            },
+            {
+                "id": "disabled",
+                "pane": "positive",
+                "type": "general",
+                "label": "General Tags",
+                "text": "bad prompt",
+                "height": 72,
+                "enabled": False,
+            },
+        ]
+        result = EasyUseAnimaPromptStudioAdvanced().build(
+            False,
+            True,
+            False,
+            False,
+            json.dumps(fields),
+        )
+
+        self.assertEqual(result["result"][0], "1girl")
+        normalized = json.loads(result["ui"]["prompt_studio_advanced"][0]["advanced_fields"])
+        self.assertFalse(normalized[1]["enabled"])
+
     def test_prompt_studio_advanced_field_socket_overrides_output_without_saving(self):
         fields = [
             {

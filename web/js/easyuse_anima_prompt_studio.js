@@ -103,6 +103,7 @@ const ADVANCED_DEFAULT_FIELDS = [
     label: "Quality Tags",
     text: "newest, masterpiece, best quality, score_8, score_7:, highres, absurdres, very aesthetic",
     height: 72,
+    enabled: true,
   },
   {
     id: "positive_artist",
@@ -111,6 +112,7 @@ const ADVANCED_DEFAULT_FIELDS = [
     label: "Artist Tags",
     text: "",
     height: 72,
+    enabled: true,
   },
   {
     id: "positive_general",
@@ -119,14 +121,16 @@ const ADVANCED_DEFAULT_FIELDS = [
     label: "General Tags",
     text: "",
     height: 150,
+    enabled: true,
   },
   {
     id: "positive_trailing",
     pane: "positive",
     type: "general",
-    label: "Trailing Tags",
+    label: "General Tags",
     text: "location, (A highly aesthetic Pixiv style illustration, clean composition, high-quality digital art, detailed background, sharp focus on facial expressions.:0.6)",
     height: 72,
+    enabled: true,
   },
   {
     id: "negative_general",
@@ -135,6 +139,7 @@ const ADVANCED_DEFAULT_FIELDS = [
     label: "General Tags",
     text: "",
     height: 120,
+    enabled: true,
   },
 ];
 
@@ -276,6 +281,9 @@ function ensureAdvancedStyle() {
     .easyuse-anima-advanced-field {
       margin: 0 0 6px;
     }
+    .easyuse-anima-advanced-field.is-disabled {
+      opacity: 0.58;
+    }
     .easyuse-anima-field-header {
       display: flex;
       align-items: center;
@@ -293,6 +301,11 @@ function ensureAdvancedStyle() {
       display: flex;
       gap: 3px;
       flex: 0 0 auto;
+    }
+    .easyuse-anima-field-tools button.is-on {
+      border-color: rgba(96, 165, 250, 0.78);
+      background: rgba(37, 99, 235, 0.58);
+      color: #fff;
     }
     .easyuse-anima-advanced-field textarea {
       box-sizing: border-box;
@@ -1017,6 +1030,10 @@ function advancedDefaultFields() {
   return JSON.parse(JSON.stringify(ADVANCED_DEFAULT_FIELDS));
 }
 
+function advancedDefaultFieldsValue() {
+  return JSON.stringify(advancedDefaultFields().map((field, index) => normalizeAdvancedField(field, index)));
+}
+
 function advancedWidget(node) {
   return findWidget(node, "advanced_fields");
 }
@@ -1037,7 +1054,11 @@ function ensureAdvancedWidgetValue(node) {
     return;
   }
   const backup = advancedFieldsBackup(node);
-  if (backup && (!widget.value || String(widget.value).trim() === "")) {
+  const widgetValue = String(widget.value || "");
+  if (
+    backup
+    && (!widgetValue.trim() || widgetValue === advancedDefaultFieldsValue())
+  ) {
     widget.value = backup;
   }
 }
@@ -1056,9 +1077,7 @@ function hideAdvancedInternalWidget(node, name) {
 
 function hideAdvancedControlWidgets(node) {
   for (const { name } of ADVANCED_CONTROL_WIDGETS) {
-    if (!isWidgetInputLinked(node, name)) {
-      hideAdvancedInternalWidget(node, name);
-    }
+    hideAdvancedInternalWidget(node, name);
   }
 }
 
@@ -1076,6 +1095,7 @@ function normalizeAdvancedField(field, index = 0) {
     label,
     text: String(field?.text || ""),
     height: Math.max(42, Math.round(Number(field?.height) || 72)),
+    enabled: field?.enabled !== false,
   };
 }
 
@@ -1130,6 +1150,13 @@ function advancedFieldInputName(field) {
   return `${ADVANCED_FIELD_SOCKET_PREFIX}${raw || "field"}`;
 }
 
+function advancedFieldIndexLabel(fields, field) {
+  const paneFields = (fields || []).filter((item) => item.pane === field.pane);
+  const paneIndex = paneFields.findIndex((item) => item.id === field.id);
+  const number = Math.max(0, paneIndex) + 1;
+  return field.pane === "negative" ? `neg${number}` : `${number}`;
+}
+
 function isAdvancedFieldInput(input) {
   return !!input?.__easyuseAnimaAdvancedFieldInput
     || String(input?.name || "").startsWith(ADVANCED_FIELD_SOCKET_PREFIX);
@@ -1141,9 +1168,9 @@ function syncAdvancedFieldInputs(node, fields) {
   }
 
   const wanted = new Map();
-  for (const field of fields || []) {
-    wanted.set(advancedFieldInputName(field), field);
-  }
+  (fields || []).forEach((field) => {
+    wanted.set(advancedFieldInputName(field), { field, indexLabel: advancedFieldIndexLabel(fields, field) });
+  });
 
   for (let index = (node.inputs?.length || 0) - 1; index >= 0; index -= 1) {
     const input = node.inputs[index];
@@ -1152,7 +1179,7 @@ function syncAdvancedFieldInputs(node, fields) {
     }
   }
 
-  for (const [name, field] of wanted) {
+  for (const [name, { field, indexLabel }] of wanted) {
     let input = node.inputs?.find((item) => item.name === name);
     if (!input) {
       node.addInput(name, "STRING");
@@ -1162,10 +1189,20 @@ function syncAdvancedFieldInputs(node, fields) {
       continue;
     }
     input.type = "STRING";
-    input.label = field.label || name;
+    input.label = `${indexLabel}. ${advancedFieldLabel(field)}`;
     input.__easyuseAnimaAdvancedFieldInput = true;
     input.__easyuseAnimaAdvancedFieldId = field.id;
   }
+
+  const fieldInputs = [];
+  for (const [name] of wanted) {
+    const input = node.inputs?.find((item) => item.name === name);
+    if (input) {
+      fieldInputs.push(input);
+    }
+  }
+  const otherInputs = (node.inputs || []).filter((input) => !isAdvancedFieldInput(input));
+  node.inputs = [...fieldInputs, ...otherInputs];
 }
 
 function advancedFieldInputLinked(node, field) {
@@ -1236,6 +1273,10 @@ function hasPositiveNaia(node) {
     .some((field) => field.pane === "positive" && field.type === "naia");
 }
 
+function advancedEditorWidth(node) {
+  return Math.max(280, Math.round((Number(node?.size?.[0]) || 360) - 24));
+}
+
 function syncAdvancedNodeSize(node) {
   requestAnimationFrame(() => {
     const editor = node.__easyuseAnimaAdvancedEditorEl;
@@ -1243,6 +1284,8 @@ function syncAdvancedNodeSize(node) {
       return;
     }
     const width = Number(node.size[0]) || 360;
+    editor.style.width = `${advancedEditorWidth(node)}px`;
+    editor.style.maxWidth = `${advancedEditorWidth(node)}px`;
     editor.classList.toggle("is-narrow", width < 620);
     const computed = node.computeSize?.();
     const nextHeight = Math.max(220, Number(computed?.[1]) || editor.scrollHeight || 0);
@@ -1413,12 +1456,13 @@ function createAdvancedFieldElement(node, field) {
   const paneIndex = samePane.findIndex((item) => item.id === field.id);
   const block = document.createElement("div");
   block.className = "easyuse-anima-advanced-field";
+  block.classList.toggle("is-disabled", field.enabled === false);
 
   const header = document.createElement("div");
   header.className = "easyuse-anima-field-header";
   const label = document.createElement("div");
   label.className = "easyuse-anima-field-label";
-  label.textContent = advancedFieldLabel(field);
+  label.textContent = `${advancedFieldIndexLabel(fields, field)}. ${advancedFieldLabel(field)}`;
   const tools = document.createElement("div");
   tools.className = "easyuse-anima-field-tools";
 
@@ -1452,9 +1496,22 @@ function createAdvancedFieldElement(node, field) {
         callback();
       }
     });
+    if (text === "ON") {
+      button.classList.add("is-on");
+    }
     tools.append(button);
+    return button;
   };
 
+  const toggleButton = addTool(
+    field.enabled === false ? "OFF" : "ON",
+    "Enable or disable this field in prompt output",
+    () => {
+      field.enabled = field.enabled === false;
+      writeAdvancedFields(node, fields, { render: true });
+    },
+  );
+  toggleButton.classList.toggle("is-on", field.enabled !== false);
   addTool("↑", "Move up", () => move(-1), paneIndex <= 0);
   addTool("↓", "Move down", () => move(1), paneIndex >= samePane.length - 1);
   addTool("X", "Delete field", () => {
@@ -1516,6 +1573,7 @@ function addAdvancedField(node, pane, type) {
     label: ADVANCED_FIELD_LABELS[type] || "General Tags",
     text: "",
     height: type === "general" || type === "naia" ? 120 : 72,
+    enabled: true,
   });
   writeAdvancedFields(node, fields, { render: true });
 }
@@ -1572,6 +1630,8 @@ function renderAdvancedEditor(node) {
   }
   node.__easyuseAnimaAdvancedFields = parseAdvancedFields(node);
   editor.innerHTML = "";
+  editor.style.width = `${advancedEditorWidth(node)}px`;
+  editor.style.maxWidth = `${advancedEditorWidth(node)}px`;
   editor.classList.toggle("is-narrow", Number(node.size?.[0] || 0) < 620);
   const panes = document.createElement("div");
   panes.className = "easyuse-anima-advanced-panes";

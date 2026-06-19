@@ -206,6 +206,7 @@ def _advanced_default_fields() -> list[dict]:
             "label": ADVANCED_FIELD_LABELS["quality"],
             "text": DEFAULT_QUALITY_TAGS,
             "height": 72,
+            "enabled": True,
         },
         {
             "id": "positive_artist",
@@ -214,6 +215,7 @@ def _advanced_default_fields() -> list[dict]:
             "label": ADVANCED_FIELD_LABELS["artist"],
             "text": "",
             "height": 72,
+            "enabled": True,
         },
         {
             "id": "positive_general",
@@ -222,14 +224,16 @@ def _advanced_default_fields() -> list[dict]:
             "label": ADVANCED_FIELD_LABELS["general"],
             "text": "",
             "height": 150,
+            "enabled": True,
         },
         {
             "id": "positive_trailing",
             "pane": "positive",
             "type": "general",
-            "label": "Trailing Tags",
+            "label": ADVANCED_FIELD_LABELS["general"],
             "text": DEFAULT_TRAILING_QUALITY_TAGS,
             "height": 72,
+            "enabled": True,
         },
         {
             "id": "negative_general",
@@ -238,6 +242,7 @@ def _advanced_default_fields() -> list[dict]:
             "label": ADVANCED_FIELD_LABELS["general"],
             "text": "",
             "height": 120,
+            "enabled": True,
         },
     ]
 
@@ -296,6 +301,7 @@ def _normalize_advanced_fields(value: str | list | None) -> list[dict]:
             "label": label,
             "text": str(item.get("text") or ""),
             "height": _as_advanced_height(item.get("height"), 72),
+            "enabled": _as_bool(item.get("enabled"), True),
         })
 
     return fields or _advanced_default_fields()
@@ -348,6 +354,7 @@ def _upsert_positive_naia_field(fields: list[dict], prompt: str) -> list[dict]:
         "label": ADVANCED_FIELD_LABELS["naia"],
         "text": prompt,
         "height": 150,
+        "enabled": True,
     })
     return normalized
 
@@ -355,6 +362,8 @@ def _upsert_positive_naia_field(fields: list[dict], prompt: str) -> list[dict]:
 def _advanced_pane_parts(fields: list[dict], pane: str) -> dict[str, list[str]]:
     parts = {"quality": [], "artist": [], "body": []}
     for field in fields:
+        if not _as_bool(field.get("enabled"), True):
+            continue
         if field.get("pane") != pane:
             continue
         field_type = field.get("type")
