@@ -23,6 +23,7 @@ const STRENGTH_STEP = 0.05;
 const PREVIEW_SIZE = 360;
 const missingPreviewNames = new Set();
 let activeLoraMenuNode = null;
+let activeProfileWheelTarget = null;
 let profileWheelListenerInstalled = false;
 const LORA_PRESET_SETTINGS = {
   nameDisplay: "name",
@@ -1080,6 +1081,7 @@ class ProfileBarWidget {
     this.hitAreas = [];
     this.scrollOffset = 0;
     this.listArea = null;
+    this.listClientArea = null;
     this.scrollTrackArea = null;
     this.scrollThumbArea = null;
     this.scrollDragging = false;
@@ -1099,6 +1101,7 @@ class ProfileBarWidget {
     const drawWidth = nodeWidgetWidth(node, width);
     this.hitAreas = [];
     this.listArea = null;
+    this.listClientArea = null;
     this.scrollTrackArea = null;
     this.scrollThumbArea = null;
     const active = activeProfileIndex(node);
@@ -1155,6 +1158,16 @@ class ProfileBarWidget {
     const scrollbarW = hasScrollbar ? 10 : 0;
     const rowW = Math.max(0, listW - scrollbarW - (hasScrollbar ? 4 : 0));
     this.listArea = [listX, listY, listW, listH];
+    const listClientStart = nodePosToClient(node, [listX, listY]);
+    const listClientEnd = nodePosToClient(node, [listX + listW, listY + listH]);
+    if (listClientStart && listClientEnd) {
+      this.listClientArea = [
+        Math.min(listClientStart[0], listClientEnd[0]),
+        Math.min(listClientStart[1], listClientEnd[1]),
+        Math.abs(listClientEnd[0] - listClientStart[0]),
+        Math.abs(listClientEnd[1] - listClientStart[1]),
+      ];
+    }
 
     ctx.save();
     ctx.beginPath();
@@ -1234,14 +1247,36 @@ class ProfileBarWidget {
     return true;
   }
 
+  scrollByWheel(deltaY, node) {
+    const count = profileCount(node);
+    const maxOffset = Math.max(0, count - PROFILE_VISIBLE_ROWS);
+    if (maxOffset <= 0) {
+      return false;
+    }
+    const direction = Number(deltaY || 0) > 0 ? 1 : -1;
+    const nextOffset = Math.max(0, Math.min(maxOffset, (this.scrollOffset || 0) + direction));
+    if (nextOffset !== this.scrollOffset) {
+      this.scrollOffset = nextOffset;
+      node.setDirtyCanvas?.(true, true);
+    }
+    return true;
+  }
+
+  updateWheelTarget(pos, node) {
+    if (pointInArea(pos, this.listArea)) {
+      activeProfileWheelTarget = {
+        node,
+        widget: this,
+        time: performance.now(),
+      };
+    } else if (activeProfileWheelTarget?.widget === this) {
+      activeProfileWheelTarget = null;
+    }
+  }
+
   mouse(event, pos, node) {
     if (event.type === "wheel" && pointInArea(pos, this.listArea)) {
-      const count = profileCount(node);
-      const maxOffset = Math.max(0, count - PROFILE_VISIBLE_ROWS);
-      const direction = Number(event.deltaY || 0) > 0 ? 1 : -1;
-      this.scrollOffset = Math.max(0, Math.min(maxOffset, (this.scrollOffset || 0) + direction));
-      node.setDirtyCanvas?.(true, true);
-      return true;
+      return this.scrollByWheel(event.deltaY, node);
     }
     if (event.type === "pointermove" && this.scrollDragging) {
       return this.scrollToPointer(pos, node);
@@ -1251,9 +1286,20 @@ class ProfileBarWidget {
       this.scrollDragDelta = 0;
       return true;
     }
+    if (event.type === "pointermove") {
+      this.updateWheelTarget(pos, node);
+      return false;
+    }
+    if (event.type === "pointerout" || event.type === "pointerleave" || event.type === "pointercancel") {
+      if (activeProfileWheelTarget?.widget === this) {
+        activeProfileWheelTarget = null;
+      }
+      return false;
+    }
     if (event.type !== "pointerdown" || event.button !== 0) {
       return false;
     }
+    this.updateWheelTarget(pos, node);
     if (pointInArea(pos, this.scrollThumbArea)) {
       this.scrollDragging = true;
       this.scrollDragDelta = pos[1] - this.scrollThumbArea[1];
@@ -1655,6 +1701,41 @@ function refreshLoraPresetNodes() {
 }
 
 function scrollProfileListFromWheel(event) {
+  if (
+    activeProfileWheelTarget?.node?.comfyClass === NODE_TYPE
+    && activeProfileWheelTarget?.widget
+    && (performance.now() - activeProfileWheelTarget.time) < 30000
+    && (app.graph?._nodes || []).includes(activeProfileWheelTarget.node)
+  ) {
+    activeProfileWheelTarget.time = performance.now();
+    const handled = activeProfileWheelTarget.widget.scrollByWheel(event.deltaY, activeProfileWheelTarget.node);
+    if (handled) {
+      event.preventDefault?.();
+      event.stopPropagation?.();
+      return true;
+    }
+  }
+
+  const clientPos = [Number(event?.clientX || 0), Number(event?.clientY || 0)];
+  const nodesByZ = [...(app.graph?._nodes || [])].reverse();
+  for (const node of nodesByZ) {
+    const bar = node?.comfyClass === NODE_TYPE ? node.__easyuseAnimaProfileBar : null;
+    if (!bar || !pointInArea(clientPos, bar.listClientArea)) {
+      continue;
+    }
+    const handled = bar.scrollByWheel(event.deltaY, node);
+    if (handled) {
+      activeProfileWheelTarget = {
+        node,
+        widget: bar,
+        time: performance.now(),
+      };
+      event.preventDefault?.();
+      event.stopPropagation?.();
+      return true;
+    }
+  }
+
   const canvas = app.canvas?.canvas;
   const rect = canvas?.getBoundingClientRect?.();
   if (
@@ -1668,8 +1749,7 @@ function scrollProfileListFromWheel(event) {
     return false;
   }
   const graphPoint = clientPointToCanvas(event);
-  const nodes = [...(app.graph?._nodes || [])].reverse();
-  for (const node of nodes) {
+  for (const node of nodesByZ) {
     if (node?.comfyClass !== NODE_TYPE || !node.__easyuseAnimaProfileBar || !Array.isArray(node.pos)) {
       continue;
     }
