@@ -1701,22 +1701,26 @@ function refreshLoraPresetNodes() {
 }
 
 function scrollProfileListFromWheel(event) {
+  const clientPos = [Number(event?.clientX || 0), Number(event?.clientY || 0)];
   if (
     activeProfileWheelTarget?.node?.comfyClass === NODE_TYPE
     && activeProfileWheelTarget?.widget
     && (performance.now() - activeProfileWheelTarget.time) < 30000
     && (app.graph?._nodes || []).includes(activeProfileWheelTarget.node)
   ) {
-    activeProfileWheelTarget.time = performance.now();
-    const handled = activeProfileWheelTarget.widget.scrollByWheel(event.deltaY, activeProfileWheelTarget.node);
-    if (handled) {
-      event.preventDefault?.();
-      event.stopPropagation?.();
-      return true;
+    if (!pointInArea(clientPos, activeProfileWheelTarget.widget.listClientArea)) {
+      activeProfileWheelTarget = null;
+    } else {
+      activeProfileWheelTarget.time = performance.now();
+      const handled = activeProfileWheelTarget.widget.scrollByWheel(event.deltaY, activeProfileWheelTarget.node);
+      if (handled) {
+        event.preventDefault?.();
+        event.stopPropagation?.();
+        return true;
+      }
     }
   }
 
-  const clientPos = [Number(event?.clientX || 0), Number(event?.clientY || 0)];
   const nodesByZ = [...(app.graph?._nodes || [])].reverse();
   for (const node of nodesByZ) {
     const bar = node?.comfyClass === NODE_TYPE ? node.__easyuseAnimaProfileBar : null;
