@@ -355,6 +355,81 @@ class PromptBuilderTests(unittest.TestCase):
             {"field_positive_general": "1girl, long hair"},
         )
 
+    def test_prompt_studio_advanced_naia_fill_stays_enabled_but_saved_metadata_is_off(self):
+        fields = [
+            {
+                "id": "positive_naia",
+                "pane": "positive",
+                "type": "naia",
+                "label": "NAIA Prompt",
+                "text": "old prompt",
+                "height": 120,
+                "enabled": True,
+            }
+        ]
+        workflow_prompt = {
+            "7": {
+                "inputs": {
+                    "use_naia": True,
+                    "advanced_fields": json.dumps(fields),
+                }
+            }
+        }
+        extra_pnginfo = {
+            "workflow": {
+                "nodes": [
+                    {
+                        "id": 7,
+                        "widgets_values": [True, True, False, False, json.dumps(fields)],
+                    }
+                ]
+            }
+        }
+        settings = {
+            "host": "127.0.0.1",
+            "port": 8188,
+            "use_naia_settings": True,
+            "pre_prompt": "",
+            "post_prompt": "",
+            "auto_hide": "",
+            "preprocessing": {},
+        }
+
+        with (
+            patch("nodes.resolve_naia_settings", return_value=settings),
+            patch(
+                "nodes._post_random",
+                return_value={
+                    "ok": True,
+                    "prompt": "1girl, silver hair",
+                    "negative_prompt": "",
+                    "width": 1024,
+                    "height": 1024,
+                },
+            ),
+        ):
+            result = EasyUseAnimaPromptStudioAdvanced().build(
+                True,
+                True,
+                False,
+                False,
+                json.dumps(fields),
+                workflow_prompt=workflow_prompt,
+                extra_pnginfo=extra_pnginfo,
+                unique_id="7",
+            )
+
+        payload = result["ui"]["prompt_studio_advanced"][0]
+        saved_fields = json.loads(payload["advanced_fields"])
+        saved_image_fields = json.loads(extra_pnginfo["workflow"]["nodes"][0]["widgets_values"][4])
+
+        self.assertTrue(payload["use_naia"])
+        self.assertEqual(saved_fields[0]["text"], "1girl, silver hair")
+        self.assertEqual(result["result"][0], "1girl, silver hair")
+        self.assertFalse(workflow_prompt["7"]["inputs"]["use_naia"])
+        self.assertFalse(extra_pnginfo["workflow"]["nodes"][0]["widgets_values"][0])
+        self.assertEqual(saved_image_fields[0]["text"], "1girl, silver hair")
+
 
 class SettingsTests(unittest.TestCase):
     def test_public_settings_does_not_expose_token_file(self):

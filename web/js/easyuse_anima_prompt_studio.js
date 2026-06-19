@@ -61,7 +61,7 @@ const ADVANCED_CONTROL_WIDGETS = [
   {
     name: "use_naia",
     label: "Fill from NAIA",
-    title: "Fill the NAIA Prompt field with a fresh NAIA random prompt on the next queue.",
+    title: "Keep filling the NAIA Prompt field with a fresh NAIA random prompt while this is enabled.",
     showInControlBar: false,
   },
   {
@@ -98,8 +98,8 @@ const ADVANCED_FIELD_LABELS = {
   naia: "NAIA Prompt",
 };
 const ADVANCED_NAIA_FILL_TITLE = (
-  "Queue once to fill this read-only NAIA Prompt field with a fresh NAIA random prompt. "
-  + "After success, saved workflows reuse the stored result with this request turned off."
+  "When enabled, every queue fills this read-only NAIA Prompt field with a fresh NAIA random prompt. "
+  + "Saved image workflows store the current result with this disabled, so reloaded images reuse it."
 );
 const ADVANCED_DEFAULT_FIELDS = [
   {
@@ -1650,8 +1650,9 @@ function createAdvancedFieldElement(node, field) {
       if (target) {
         target.enabled = true;
       }
+      const nextValue = !findWidget(node, "use_naia")?.value;
       setAdvancedControlValue(node, "consume_naia_on_queue", true);
-      setAdvancedControlValue(node, "use_naia", true);
+      setAdvancedControlValue(node, "use_naia", nextValue);
       writeAdvancedFields(node, currentFields, { render: true });
     }, linkedUseNaia);
     fillButton.classList.add("easyuse-anima-naia-fill");
@@ -1726,6 +1727,10 @@ function addAdvancedField(node, pane, type) {
     height: type === "general" || type === "naia" ? 120 : 72,
     enabled: true,
   });
+  if (type === "naia") {
+    setAdvancedControlValue(node, "consume_naia_on_queue", true);
+    setAdvancedControlValue(node, "use_naia", true);
+  }
   writeAdvancedFields(node, fields, { render: true });
 }
 

@@ -1163,10 +1163,10 @@ class EasyUseAnimaPromptStudioAdvanced:
         saved_fields = _clone_advanced_fields(fields)
         effective_fields = _apply_advanced_field_inputs(fields, field_inputs)
         effective_field_inputs = _advanced_field_input_values(field_inputs)
-        should_consume_naia = True
-        saved_use_naia = _as_bool(use_naia, False)
+        live_use_naia = _as_bool(use_naia, False)
+        metadata_use_naia = live_use_naia
 
-        if _as_bool(use_naia, False):
+        if live_use_naia:
             naia_settings = resolve_naia_settings()
             body = EasyUseAnimaNAIARandomPrompt._make_request_body(
                 _as_bool(naia_settings["use_naia_settings"], True),
@@ -1179,16 +1179,16 @@ class EasyUseAnimaPromptStudioAdvanced:
             naia_prompt, _naia_negative, _naia_width, _naia_height = _parse_random_response(resp)
             saved_fields = _upsert_positive_naia_field(saved_fields, naia_prompt)
             effective_fields = _upsert_positive_naia_field(effective_fields, naia_prompt)
-            saved_use_naia = False if should_consume_naia else True
+            metadata_use_naia = False
 
         fields_json = _advanced_fields_json(saved_fields)
-        if _as_bool(use_naia, False):
+        if live_use_naia:
             self._update_metadata_fields(
                 workflow_prompt,
                 extra_pnginfo,
                 unique_id,
                 fields_json,
-                saved_use_naia,
+                metadata_use_naia,
             )
 
         result = _build_advanced_prompts(
@@ -1197,7 +1197,7 @@ class EasyUseAnimaPromptStudioAdvanced:
             pin_trigger_tags_to_front,
         )
         return {
-            "ui": self._ui(fields_json, saved_use_naia, effective_field_inputs),
+            "ui": self._ui(fields_json, live_use_naia, effective_field_inputs),
             "result": result,
         }
 
