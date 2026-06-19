@@ -1190,15 +1190,37 @@ function updateNodeInputLinkSlots(node) {
   if (!node?.inputs || !app.graph?.links) {
     return;
   }
+  const expectedLinks = new Set();
   node.inputs.forEach((input, index) => {
     if (input?.link == null) {
       return;
     }
     const link = app.graph.links[input.link];
     if (link) {
+      expectedLinks.add(Number(input.link));
+      link.target_id = node.id;
       link.target_slot = index;
     }
   });
+
+  for (const [rawLinkId, link] of Object.entries(app.graph.links)) {
+    const linkId = Number(rawLinkId);
+    if (!link || Number(link.target_id) !== Number(node.id)) {
+      continue;
+    }
+    const targetInput = node.inputs?.[link.target_slot];
+    if (targetInput?.link === linkId) {
+      continue;
+    }
+    const originNode = app.graph.getNodeById?.(link.origin_id);
+    const originOutput = originNode?.outputs?.[link.origin_slot];
+    if (Array.isArray(originOutput?.links)) {
+      originOutput.links = originOutput.links.filter((id) => Number(id) !== linkId);
+    }
+    if (!expectedLinks.has(linkId)) {
+      delete app.graph.links[rawLinkId];
+    }
+  }
 }
 
 function syncAdvancedFieldInputs(node, fields) {
