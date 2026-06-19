@@ -294,6 +294,34 @@ class PromptBuilderTests(unittest.TestCase):
         self.assertEqual(normalized[0]["pane"], "negative")
         self.assertEqual(normalized[0]["type"], "general")
 
+    def test_prompt_studio_advanced_field_socket_overrides_output_without_saving(self):
+        fields = [
+            {
+                "id": "positive_general",
+                "pane": "positive",
+                "type": "general",
+                "label": "General Tags",
+                "text": "old prompt",
+                "height": 120,
+            }
+        ]
+        result = EasyUseAnimaPromptStudioAdvanced().build(
+            False,
+            True,
+            False,
+            False,
+            json.dumps(fields),
+            field_positive_general="1girl, long hair",
+        )
+
+        self.assertEqual(result["result"][0], "1girl, long hair")
+        saved = json.loads(result["ui"]["prompt_studio_advanced"][0]["advanced_fields"])
+        self.assertEqual(saved[0]["text"], "old prompt")
+        self.assertEqual(
+            result["ui"]["prompt_studio_advanced"][0]["field_inputs"],
+            {"field_positive_general": "1girl, long hair"},
+        )
+
 
 class SettingsTests(unittest.TestCase):
     def test_public_settings_does_not_expose_token_file(self):

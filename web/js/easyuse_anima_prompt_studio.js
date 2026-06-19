@@ -87,6 +87,7 @@ const ADVANCED_WIDGET_INDEX = {
   advanced_fields: 4,
 };
 const ADVANCED_FIELDS_PROPERTY = "easyuse_anima_advanced_fields";
+const ADVANCED_FIELD_SOCKET_PREFIX = "field_";
 const ADVANCED_FIELD_TYPES = ["quality", "artist", "general", "naia"];
 const ADVANCED_FIELD_LABELS = {
   quality: "Quality Tags",
@@ -198,12 +199,12 @@ function ensureAdvancedStyle() {
       user-select: none;
     }
     .easyuse-anima-advanced-panes {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
+      display: flex;
+      flex-direction: column;
       gap: 8px;
     }
     .easyuse-anima-advanced-editor.is-narrow .easyuse-anima-advanced-panes {
-      grid-template-columns: 1fr;
+      flex-direction: column;
     }
     .easyuse-anima-advanced-controlbar {
       display: flex;
@@ -308,6 +309,11 @@ function ensureAdvancedStyle() {
     }
     .easyuse-anima-advanced-field textarea:focus {
       border-color: rgba(96, 165, 250, 0.7);
+    }
+    .easyuse-anima-advanced-field textarea.is-linked {
+      opacity: 0.72;
+      border-style: dashed;
+      cursor: default;
     }
     .easyuse-anima-empty-pane {
       padding: 10px 4px;
@@ -1109,11 +1115,71 @@ function writeAdvancedFields(node, fields, { render = false } = {}) {
   widget.value = JSON.stringify(fields.map((field, index) => normalizeAdvancedField(field, index)));
   syncAdvancedFieldsBackup(node, widget.value);
   node.__easyuseAnimaAdvancedFields = fields;
+  syncAdvancedFieldInputs(node, fields);
   node.setDirtyCanvas?.(true, true);
   app.graph?.setDirtyCanvas?.(true, true);
   if (render) {
     renderAdvancedEditor(node);
   }
+}
+
+function advancedFieldInputName(field) {
+  const raw = String(field?.id || "field")
+    .replace(/[^a-zA-Z0-9_]/g, "_")
+    .replace(/^_+|_+$/g, "");
+  return `${ADVANCED_FIELD_SOCKET_PREFIX}${raw || "field"}`;
+}
+
+function isAdvancedFieldInput(input) {
+  return !!input?.__easyuseAnimaAdvancedFieldInput
+    || String(input?.name || "").startsWith(ADVANCED_FIELD_SOCKET_PREFIX);
+}
+
+function syncAdvancedFieldInputs(node, fields) {
+  if (!node || typeof node.addInput !== "function") {
+    return;
+  }
+
+  const wanted = new Map();
+  for (const field of fields || []) {
+    wanted.set(advancedFieldInputName(field), field);
+  }
+
+  for (let index = (node.inputs?.length || 0) - 1; index >= 0; index -= 1) {
+    const input = node.inputs[index];
+    if (isAdvancedFieldInput(input) && !wanted.has(input.name)) {
+      node.removeInput?.(index);
+    }
+  }
+
+  for (const [name, field] of wanted) {
+    let input = node.inputs?.find((item) => item.name === name);
+    if (!input) {
+      node.addInput(name, "STRING");
+      input = node.inputs?.find((item) => item.name === name);
+    }
+    if (!input) {
+      continue;
+    }
+    input.type = "STRING";
+    input.label = field.label || name;
+    input.__easyuseAnimaAdvancedFieldInput = true;
+    input.__easyuseAnimaAdvancedFieldId = field.id;
+  }
+}
+
+function advancedFieldInputLinked(node, field) {
+  const name = advancedFieldInputName(field);
+  return !!node.inputs?.some((input) => input.name === name && input.link != null);
+}
+
+function advancedFieldDisplayText(node, field) {
+  const name = advancedFieldInputName(field);
+  const values = node.__easyuseAnimaAdvancedFieldInputValues || {};
+  if (advancedFieldInputLinked(node, field) && Object.prototype.hasOwnProperty.call(values, name)) {
+    return String(values[name] ?? "");
+  }
+  return String(field?.text || "");
 }
 
 function advancedFieldLabel(field) {
@@ -1398,10 +1464,14 @@ function createAdvancedFieldElement(node, field) {
   });
 
   const textarea = document.createElement("textarea");
-  textarea.value = field.text || "";
+  const linked = advancedFieldInputLinked(node, field);
+  textarea.value = advancedFieldDisplayText(node, field);
   textarea.style.height = `${field.height || 72}px`;
   textarea.style.overflowY = "hidden";
   textarea.placeholder = field.type === "artist" ? "@artist_tag" : "prompt tags";
+  textarea.readOnly = linked;
+  textarea.classList.toggle("is-linked", linked);
+  textarea.title = linked ? "Connected STRING input controls this field during execution." : "";
   textarea.dataset.easyuseAnimaAdvancedFieldId = field.id;
   const syncHeight = () => {
     const height = desiredTextareaHeight(
@@ -1417,6 +1487,9 @@ function createAdvancedFieldElement(node, field) {
     syncAdvancedNodeSize(node);
   };
   textarea.addEventListener("input", () => {
+    if (linked) {
+      return;
+    }
     field.text = textarea.value;
     syncHeight();
   });
@@ -1503,8 +1576,8 @@ function renderAdvancedEditor(node) {
   const panes = document.createElement("div");
   panes.className = "easyuse-anima-advanced-panes";
   panes.append(
-    createAdvancedPane(node, "negative", "Negative Prompt"),
     createAdvancedPane(node, "positive", "Positive Prompt"),
+    createAdvancedPane(node, "negative", "Negative Prompt"),
   );
   editor.append(createAdvancedControlBar(node), panes);
   writeAdvancedFields(node, node.__easyuseAnimaAdvancedFields);
@@ -1560,6 +1633,8 @@ function applyAdvancedExecutedInputs(node, message) {
   if (!payload || typeof payload !== "object") {
     return;
   }
+  node.__easyuseAnimaAdvancedFieldInputValues =
+    payload.field_inputs && typeof payload.field_inputs === "object" ? payload.field_inputs : {};
   const widget = advancedWidget(node);
   if (widget && payload.advanced_fields != null) {
     widget.value = String(payload.advanced_fields);

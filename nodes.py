@@ -65,6 +65,10 @@ _MULTI_COMMA_RE = re.compile(r"(\s*,){2,}")
 _INLINE_SPACE_RE = re.compile(r"[ \t]+")
 _WEIGHTED_TOKEN_RE = re.compile(r"^\(([^(),]+):[-+]?\d+(?:\.\d+)?\)$")
 _TRIGGER_WORD_KEYS = ("trainedWords", "trained_words", "trigger_words", "activation_text")
+_ADVANCED_FIELD_SOCKET_PREFIX = "field_"
+_ADVANCED_FIELD_SOCKET_RE = re.compile(r"[^A-Za-z0-9_]")
+
+
 class _AnyType(str):
     def __ne__(self, __value: object) -> bool:
         return False
@@ -295,6 +299,40 @@ def _normalize_advanced_fields(value: str | list | None) -> list[dict]:
         })
 
     return fields or _advanced_default_fields()
+
+
+def _clone_advanced_fields(fields: list[dict]) -> list[dict]:
+    return [dict(field) for field in fields]
+
+
+def _advanced_field_socket_name(field: dict) -> str:
+    raw = _ADVANCED_FIELD_SOCKET_RE.sub("_", str(field.get("id") or "field")).strip("_")
+    return f"{_ADVANCED_FIELD_SOCKET_PREFIX}{raw or 'field'}"
+
+
+def _advanced_field_input_values(field_inputs: dict) -> dict[str, str]:
+    values: dict[str, str] = {}
+    for key, value in field_inputs.items():
+        if not str(key).startswith(_ADVANCED_FIELD_SOCKET_PREFIX):
+            continue
+        single = _single_value(value)
+        if single is None:
+            continue
+        values[str(key)] = str(single)
+    return values
+
+
+def _apply_advanced_field_inputs(fields: list[dict], field_inputs: dict) -> list[dict]:
+    values = _advanced_field_input_values(field_inputs)
+    if not values:
+        return _clone_advanced_fields(fields)
+
+    effective = _clone_advanced_fields(fields)
+    for field in effective:
+        name = _advanced_field_socket_name(field)
+        if name in values:
+            field["text"] = values[name]
+    return effective
 
 
 def _upsert_positive_naia_field(fields: list[dict], prompt: str) -> list[dict]:
@@ -998,6 +1036,7 @@ class EasyUseAnimaPromptStudioAdvanced:
                     "tooltip": "Internal JSON payload for Advanced Prompt Studio fields.",
                 }),
             },
+            "optional": _FlexibleOptionalInputType("STRING"),
             "hidden": {
                 "workflow_prompt": "PROMPT",
                 "extra_pnginfo": "EXTRA_PNGINFO",
@@ -1034,12 +1073,13 @@ class EasyUseAnimaPromptStudioAdvanced:
         if _as_bool(use_naia, False):
             return float("nan")
         fields = _normalize_advanced_fields(advanced_fields)
+        effective_fields = _apply_advanced_field_inputs(fields, kwargs)
         return _stable_change_key({
             "mode": "prompt_studio_advanced",
             "metadata_filter_words": resolve_metadata_filter_words(),
             "use_anima_mod_guidance": _as_bool(use_anima_mod_guidance, False),
             "pin_trigger_tags_to_front": _as_bool(pin_trigger_tags_to_front, False),
-            "advanced_fields": _advanced_fields_json(fields),
+            "advanced_fields": _advanced_fields_json(effective_fields),
         })
 
     @classmethod
@@ -1082,11 +1122,12 @@ class EasyUseAnimaPromptStudioAdvanced:
             widgets_values[index] = value
 
     @staticmethod
-    def _ui(advanced_fields: str, use_naia: bool):
+    def _ui(advanced_fields: str, use_naia: bool, field_inputs: dict | None = None):
         return {
             "prompt_studio_advanced": [{
                 "advanced_fields": advanced_fields,
                 "use_naia": _as_bool(use_naia, False),
+                "field_inputs": field_inputs or {},
             }]
         }
 
@@ -1100,8 +1141,12 @@ class EasyUseAnimaPromptStudioAdvanced:
         workflow_prompt=None,
         extra_pnginfo=None,
         unique_id=None,
+        **field_inputs,
     ):
         fields = _normalize_advanced_fields(advanced_fields)
+        saved_fields = _clone_advanced_fields(fields)
+        effective_fields = _apply_advanced_field_inputs(fields, field_inputs)
+        effective_field_inputs = _advanced_field_input_values(field_inputs)
         should_consume_naia = _as_bool(consume_naia_on_queue, True)
         saved_use_naia = _as_bool(use_naia, False)
 
@@ -1116,10 +1161,11 @@ class EasyUseAnimaPromptStudioAdvanced:
             )
             resp = _post_random(naia_settings["host"], naia_settings["port"], body)
             naia_prompt, _naia_negative, _naia_width, _naia_height = _parse_random_response(resp)
-            fields = _upsert_positive_naia_field(fields, naia_prompt)
+            saved_fields = _upsert_positive_naia_field(saved_fields, naia_prompt)
+            effective_fields = _upsert_positive_naia_field(effective_fields, naia_prompt)
             saved_use_naia = False if should_consume_naia else True
 
-        fields_json = _advanced_fields_json(fields)
+        fields_json = _advanced_fields_json(saved_fields)
         if _as_bool(use_naia, False):
             self._update_metadata_fields(
                 workflow_prompt,
@@ -1130,12 +1176,12 @@ class EasyUseAnimaPromptStudioAdvanced:
             )
 
         result = _build_advanced_prompts(
-            fields,
+            effective_fields,
             use_anima_mod_guidance,
             pin_trigger_tags_to_front,
         )
         return {
-            "ui": self._ui(fields_json, saved_use_naia),
+            "ui": self._ui(fields_json, saved_use_naia, effective_field_inputs),
             "result": result,
         }
 
