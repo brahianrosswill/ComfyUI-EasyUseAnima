@@ -57,6 +57,28 @@ const PROMPT_STUDIO_SETTINGS = {
   typoIndicator: true,
 };
 let middlePanForwardActive = false;
+const ADVANCED_CONTROL_WIDGETS = [
+  {
+    name: "use_naia",
+    label: "NAIA",
+    title: "Call NAIA once and write the result into the positive NAIA field.",
+  },
+  {
+    name: "consume_naia_on_queue",
+    label: "1x",
+    title: "After a successful NAIA call, save the workflow with use_naia turned off.",
+  },
+  {
+    name: "use_anima_mod_guidance",
+    label: "AMG",
+    title: "Send positive quality fields to Anima Mod Guidance output.",
+  },
+  {
+    name: "pin_trigger_tags_to_front",
+    label: "Pin",
+    title: "Keep positive artist/trigger fields at the front.",
+  },
+];
 const ADVANCED_FIELD_TYPES = ["quality", "artist", "general", "naia"];
 const ADVANCED_FIELD_LABELS = {
   quality: "Quality Tags",
@@ -174,6 +196,37 @@ function ensureAdvancedStyle() {
     }
     .easyuse-anima-advanced-editor.is-narrow .easyuse-anima-advanced-panes {
       grid-template-columns: 1fr;
+    }
+    .easyuse-anima-advanced-controlbar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 5px;
+      margin-bottom: 7px;
+    }
+    .easyuse-anima-advanced-toggle {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 34px;
+      height: 21px;
+      padding: 0 7px;
+      border: 1px solid rgba(148, 163, 184, 0.36);
+      background: rgba(30, 41, 59, 0.78);
+      color: rgba(226, 232, 240, 0.72);
+      font: 10px sans-serif;
+      line-height: 1;
+      cursor: pointer;
+    }
+    .easyuse-anima-advanced-toggle.is-on {
+      border-color: rgba(96, 165, 250, 0.78);
+      background: rgba(37, 99, 235, 0.68);
+      color: #fff;
+      font-weight: 700;
+    }
+    .easyuse-anima-advanced-toggle.is-linked {
+      opacity: 0.55;
+      cursor: default;
     }
     .easyuse-anima-advanced-pane {
       min-width: 0;
@@ -966,6 +1019,14 @@ function hideAdvancedInternalWidget(node, name) {
   widget.draw = () => {};
 }
 
+function hideAdvancedControlWidgets(node) {
+  for (const { name } of ADVANCED_CONTROL_WIDGETS) {
+    if (!isWidgetInputLinked(node, name)) {
+      hideAdvancedInternalWidget(node, name);
+    }
+  }
+}
+
 function normalizeAdvancedField(field, index = 0) {
   const pane = field?.pane === "negative" ? "negative" : "positive";
   let type = ADVANCED_FIELD_TYPES.includes(field?.type) ? field.type : "general";
@@ -1028,6 +1089,45 @@ function advancedFieldLabel(field) {
   return field.label && field.label !== base ? `${base} - ${field.label}` : base;
 }
 
+function setAdvancedControlValue(node, name, value) {
+  const widget = findWidget(node, name);
+  if (!widget || isWidgetInputLinked(node, name)) {
+    return;
+  }
+  widget.value = !!value;
+  widget.callback?.(widget.value);
+  node.setDirtyCanvas?.(true, true);
+  app.graph?.setDirtyCanvas?.(true, true);
+}
+
+function createAdvancedControlBar(node) {
+  const bar = document.createElement("div");
+  bar.className = "easyuse-anima-advanced-controlbar";
+  for (const control of ADVANCED_CONTROL_WIDGETS) {
+    const widget = findWidget(node, control.name);
+    if (!widget) {
+      continue;
+    }
+    const linked = isWidgetInputLinked(node, control.name);
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "easyuse-anima-advanced-toggle";
+    button.classList.toggle("is-on", !!widget.value);
+    button.classList.toggle("is-linked", linked);
+    button.textContent = control.label;
+    button.title = linked ? `${control.title} Linked input controls this value.` : control.title;
+    button.disabled = linked;
+    button.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      setAdvancedControlValue(node, control.name, !widget.value);
+      renderAdvancedEditor(node);
+    });
+    bar.append(button);
+  }
+  return bar;
+}
+
 function advancedPaneFields(node, pane) {
   return (node.__easyuseAnimaAdvancedFields || parseAdvancedFields(node))
     .filter((field) => field.pane === pane);
@@ -1047,11 +1147,12 @@ function syncAdvancedNodeSize(node) {
     const width = Number(node.size[0]) || 360;
     editor.classList.toggle("is-narrow", width < 620);
     const computed = node.computeSize?.();
-    const nextHeight = Math.max(Number(node.size[1]) || 0, Number(computed?.[1]) || 0);
+    const nextHeight = Math.max(220, Number(computed?.[1]) || editor.scrollHeight || 0);
     if (nextHeight && Math.abs(nextHeight - Number(node.size[1] || 0)) > 2) {
       node.setSize([width, nextHeight]);
     }
     app.graph?.setDirtyCanvas?.(true, true);
+    requestAnimationFrame(() => app.graph?.setDirtyCanvas?.(true, true));
   });
 }
 
@@ -1370,10 +1471,10 @@ function renderAdvancedEditor(node) {
   const panes = document.createElement("div");
   panes.className = "easyuse-anima-advanced-panes";
   panes.append(
-    createAdvancedPane(node, "positive", "Positive Prompt"),
     createAdvancedPane(node, "negative", "Negative Prompt"),
+    createAdvancedPane(node, "positive", "Positive Prompt"),
   );
-  editor.append(panes);
+  editor.append(createAdvancedControlBar(node), panes);
   writeAdvancedFields(node, node.__easyuseAnimaAdvancedFields);
   syncAdvancedNodeSize(node);
 }
@@ -1381,6 +1482,7 @@ function renderAdvancedEditor(node) {
 function hookAdvancedNode(node) {
   ensureAdvancedStyle();
   hideAdvancedInternalWidget(node, "advanced_fields");
+  hideAdvancedControlWidgets(node);
   node.serialize_widgets = true;
   if (!node.__easyuseAnimaAdvancedEditorEl) {
     const editor = document.createElement("div");
