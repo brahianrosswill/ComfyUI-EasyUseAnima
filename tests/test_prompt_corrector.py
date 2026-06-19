@@ -13,7 +13,7 @@ from nodes import (
     EasyUseAnimaPromptCorrector,
     EasyUseAnimaPromptStudio,
     EasyUseAnimaPromptStudioAdvanced,
-    EasyUseAnimaPromptStudioFixed,
+    EasyUseAnimaPromptStudioExtend,
 )
 from autocomplete_dataset import (
     autocomplete_status,
@@ -431,8 +431,8 @@ class PromptBuilderTests(unittest.TestCase):
         self.assertFalse(extra_pnginfo["workflow"]["nodes"][0]["widgets_values"][0])
         self.assertEqual(saved_image_fields[0]["text"], "1girl, silver hair")
 
-    def test_prompt_studio_fixed_uses_numbered_slot_order(self):
-        result = EasyUseAnimaPromptStudioFixed().build(
+    def test_prompt_studio_extend_uses_numbered_slot_order(self):
+        result = EasyUseAnimaPromptStudioExtend().build(
             False,
             True,
             False,
@@ -466,7 +466,7 @@ class PromptBuilderTests(unittest.TestCase):
         self.assertEqual(metadata_negative, negative)
         self.assertEqual(payload["naia_prompt_3"], "1girl")
 
-    def test_prompt_studio_fixed_naia_fill_stays_enabled_but_saved_metadata_is_off(self):
+    def test_prompt_studio_extend_naia_fill_stays_enabled_but_saved_metadata_is_off(self):
         workflow_prompt = {
             "11": {
                 "inputs": {
@@ -508,7 +508,7 @@ class PromptBuilderTests(unittest.TestCase):
                 },
             ),
         ):
-            result = EasyUseAnimaPromptStudioFixed().build(
+            result = EasyUseAnimaPromptStudioExtend().build(
                 True,
                 False,
                 False,

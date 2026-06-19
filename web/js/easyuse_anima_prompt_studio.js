@@ -2,7 +2,7 @@ import { app } from "../../../scripts/app.js";
 
 const NODE_TYPE = "EasyUseAnimaPromptStudio";
 const ADVANCED_NODE_TYPE = "EasyUseAnimaPromptStudioAdvanced";
-const FIXED_NODE_TYPE = "EasyUseAnimaPromptStudioFixed";
+const EXTEND_NODE_TYPE = "EasyUseAnimaPromptStudioExtend";
 const FIELD_NAMES = [
   "lora_trigger_tags",
   "quality_tags",
@@ -10,7 +10,7 @@ const FIELD_NAMES = [
   "prompt",
   "trailing_quality_tags",
 ];
-const FIXED_FIELD_NAMES = [
+const EXTEND_FIELD_NAMES = [
   "quality_tags_1",
   "quality_tags_2",
   "naia_prompt_3",
@@ -27,14 +27,14 @@ const FIXED_FIELD_NAMES = [
   "negative_prompt_3",
   "negative_prompt_4",
 ];
-const FIXED_VISIBLE_SLOTS_PROPERTY = "easyuse_anima_fixed_visible_slots";
-const FIXED_SLOT_GROUPS = [
+const EXTEND_VISIBLE_SLOTS_PROPERTY = "easyuse_anima_extend_visible_slots";
+const EXTEND_SLOT_GROUPS = [
   { id: "quality", label: "Quality", fields: ["quality_tags_1", "quality_tags_2"] },
   { id: "general", label: "General", fields: ["general_tags_4", "general_tags_5", "general_tags_6", "general_tags_7", "general_tags_8", "general_tags_9"] },
   { id: "trailing", label: "Trailing", fields: ["trailing_tags_10", "trailing_tags_11"] },
   { id: "negative", label: "Negative", fields: ["negative_prompt_1", "negative_prompt_2", "negative_prompt_3", "negative_prompt_4"] },
 ];
-const FIXED_ALWAYS_VISIBLE_FIELDS = new Set(["naia_prompt_3"]);
+const EXTEND_ALWAYS_VISIBLE_FIELDS = new Set(["naia_prompt_3"]);
 
 const FIELD_HEIGHTS = {
   lora_trigger_tags: 42,
@@ -43,7 +43,7 @@ const FIELD_HEIGHTS = {
   prompt: 150,
   trailing_quality_tags: 72,
 };
-const FIXED_FIELD_HEIGHTS = {
+const EXTEND_FIELD_HEIGHTS = {
   quality_tags_1: 72,
   quality_tags_2: 72,
   naia_prompt_3: 150,
@@ -396,27 +396,27 @@ function ensureAdvancedStyle() {
   document.head.append(style);
 }
 
-function ensureFixedSlotStyle() {
-  if (document.getElementById("easyuse-anima-fixed-slot-style")) {
+function ensureExtendSlotStyle() {
+  if (document.getElementById("easyuse-anima-extend-slot-style")) {
     return;
   }
   const style = document.createElement("style");
-  style.id = "easyuse-anima-fixed-slot-style";
+  style.id = "easyuse-anima-extend-slot-style";
   style.textContent = `
-    .easyuse-anima-fixed-slots {
+    .easyuse-anima-extend-slots {
       box-sizing: border-box;
       width: 100%;
       color: var(--fg-color, #ddd);
       font: 11px sans-serif;
       user-select: none;
     }
-    .easyuse-anima-fixed-slot-row {
+    .easyuse-anima-extend-slot-row {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 5px;
       width: 100%;
     }
-    .easyuse-anima-fixed-slot-row button {
+    .easyuse-anima-extend-slot-row button {
       box-sizing: border-box;
       min-width: 0;
       height: 24px;
@@ -427,11 +427,11 @@ function ensureFixedSlotStyle() {
       font: 11px sans-serif;
       cursor: pointer;
     }
-    .easyuse-anima-fixed-slot-row button:hover:not(:disabled) {
+    .easyuse-anima-extend-slot-row button:hover:not(:disabled) {
       border-color: rgba(96, 165, 250, 0.74);
       background: rgba(30, 64, 175, 0.5);
     }
-    .easyuse-anima-fixed-slot-row button:disabled {
+    .easyuse-anima-extend-slot-row button:disabled {
       opacity: 0.42;
       cursor: default;
     }
@@ -824,6 +824,94 @@ function desiredTextareaHeight(input, currentHeight, minimumHeight) {
   );
 }
 
+function studioMinimumHeight(widget, input = findInputEl(widget)) {
+  return desiredTextareaHeight(input, 0, Math.min(studioDefaultHeight(widget), 54));
+}
+
+function studioCurrentHeight(widget, input = findInputEl(widget)) {
+  const styleHeight = Number.parseFloat(input?.style?.height || "");
+  return Math.round(
+    Number(input?.offsetHeight)
+    || Number(input?.clientHeight)
+    || styleHeight
+    || Number(widget?.__easyuseAnimaHeight)
+    || studioDefaultHeight(widget),
+  );
+}
+
+function setStudioInputHeight(node, widget, height, refresh = false) {
+  const input = findInputEl(widget);
+  if (!input) {
+    return;
+  }
+  const minimumHeight = studioMinimumHeight(widget, input);
+  const nextHeight = Math.max(minimumHeight, Math.round(Number(height) || 0));
+  if (Math.abs(nextHeight - (widget.__easyuseAnimaHeight || 0)) > 1) {
+    widget.__easyuseAnimaHeight = nextHeight;
+    input.style.height = `${nextHeight}px`;
+    if (refresh) {
+      refreshNodeSize(node);
+    }
+  } else {
+    input.style.height = `${nextHeight}px`;
+  }
+  updateHighlight(node, widget);
+}
+
+function expandStudioInputToContent(node, widget, refresh = false) {
+  const input = findInputEl(widget);
+  if (!input || widget.__easyuseAnimaExtendHidden) {
+    return;
+  }
+  const height = desiredTextareaHeight(
+    input,
+    studioCurrentHeight(widget, input),
+    Math.min(studioDefaultHeight(widget), 54),
+  );
+  setStudioInputHeight(node, widget, height, refresh);
+}
+
+function visibleStudioWidgets(node) {
+  return studioFieldNames(node)
+    .map((name) => findWidget(node, name))
+    .filter((widget) => {
+      const input = findInputEl(widget);
+      return widget && input && !widget.hidden && !widget.__easyuseAnimaExtendHidden;
+    });
+}
+
+function rebalanceStudioInputHeights(node) {
+  const widgets = visibleStudioWidgets(node);
+  if (!widgets.length) {
+    return;
+  }
+
+  const currentHeights = widgets.map((widget) => studioCurrentHeight(widget));
+  const minimumHeights = widgets.map((widget) => studioMinimumHeight(widget));
+  const currentTotal = currentHeights.reduce((sum, value) => sum + value, 0);
+  const minimumTotal = minimumHeights.reduce((sum, value) => sum + value, 0);
+  const computedHeight = Number(node.computeSize?.()[1]) || currentTotal;
+  const nonInputHeight = Math.max(0, computedHeight - currentTotal);
+  const targetInputTotal = Math.max(minimumTotal, (Number(node.size?.[1]) || computedHeight) - nonInputHeight);
+
+  if (targetInputTotal < currentTotal - 2) {
+    const currentExtra = Math.max(0, currentTotal - minimumTotal);
+    const targetExtra = Math.max(0, targetInputTotal - minimumTotal);
+    const ratio = currentExtra > 0 ? targetExtra / currentExtra : 0;
+    for (const [index, widget] of widgets.entries()) {
+      const nextHeight = minimumHeights[index] + (currentHeights[index] - minimumHeights[index]) * ratio;
+      setStudioInputHeight(node, widget, nextHeight);
+    }
+    refreshNodeSize(node);
+    return;
+  }
+
+  for (const widget of widgets) {
+    expandStudioInputToContent(node, widget);
+  }
+  refreshNodeSize(node);
+}
+
 function desiredLegendHeight() {
   return LEGEND_TOP_GAP + 16 + Math.ceil(LEGEND_ITEMS.length / LEGEND_COLUMNS) * LEGEND_ROW_HEIGHT;
 }
@@ -896,24 +984,24 @@ function displayText(node, widget) {
   return String(widget?.inputEl?.value ?? widget?.value ?? "");
 }
 
-function isFixedNode(node) {
-  return node?.type === FIXED_NODE_TYPE || node?.comfyClass === FIXED_NODE_TYPE;
+function isExtendNode(node) {
+  return node?.type === EXTEND_NODE_TYPE || node?.comfyClass === EXTEND_NODE_TYPE;
 }
 
 function studioFieldNames(node) {
-  return isFixedNode(node) ? FIXED_FIELD_NAMES : FIELD_NAMES;
+  return isExtendNode(node) ? EXTEND_FIELD_NAMES : FIELD_NAMES;
 }
 
-function fixedVisibleSlots(node) {
-  const raw = node?.properties?.[FIXED_VISIBLE_SLOTS_PROPERTY];
+function extendVisibleSlots(node) {
+  const raw = node?.properties?.[EXTEND_VISIBLE_SLOTS_PROPERTY];
   if (Array.isArray(raw)) {
-    return new Set(raw.filter((name) => FIXED_FIELD_NAMES.includes(name)));
+    return new Set(raw.filter((name) => EXTEND_FIELD_NAMES.includes(name)));
   }
   if (typeof raw === "string" && raw.trim()) {
     try {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed)) {
-        return new Set(parsed.filter((name) => FIXED_FIELD_NAMES.includes(name)));
+        return new Set(parsed.filter((name) => EXTEND_FIELD_NAMES.includes(name)));
       }
     } catch {
       return new Set();
@@ -922,44 +1010,44 @@ function fixedVisibleSlots(node) {
   return new Set();
 }
 
-function writeFixedVisibleSlots(node, slots) {
+function writeExtendVisibleSlots(node, slots) {
   node.properties ||= {};
-  node.properties[FIXED_VISIBLE_SLOTS_PROPERTY] = [...slots].filter((name) => FIXED_FIELD_NAMES.includes(name));
+  node.properties[EXTEND_VISIBLE_SLOTS_PROPERTY] = [...slots].filter((name) => EXTEND_FIELD_NAMES.includes(name));
 }
 
-function fixedSlotHasValue(node, fieldName) {
+function extendSlotHasValue(node, fieldName) {
   const widget = findWidget(node, fieldName);
   const value = String(widget?.inputEl?.value ?? widget?.value ?? "");
   return value.trim().length > 0;
 }
 
-function fixedSlotShouldShow(node, fieldName) {
-  if (FIXED_ALWAYS_VISIBLE_FIELDS.has(fieldName)) {
+function extendSlotShouldShow(node, fieldName) {
+  if (EXTEND_ALWAYS_VISIBLE_FIELDS.has(fieldName)) {
     return true;
   }
-  const visible = fixedVisibleSlots(node);
-  return visible.has(fieldName) || fixedSlotHasValue(node, fieldName) || isWidgetInputLinked(node, fieldName);
+  const visible = extendVisibleSlots(node);
+  return visible.has(fieldName) || extendSlotHasValue(node, fieldName) || isWidgetInputLinked(node, fieldName);
 }
 
-function setFixedWidgetHidden(widget, hidden) {
+function setExtendWidgetHidden(widget, hidden) {
   if (!widget) {
     return;
   }
-  if (!widget.__easyuseAnimaFixedOriginalComputeSize) {
-    widget.__easyuseAnimaFixedOriginalComputeSize = widget.computeSize;
+  if (!widget.__easyuseAnimaExtendOriginalComputeSize) {
+    widget.__easyuseAnimaExtendOriginalComputeSize = widget.computeSize;
   }
-  if (!widget.__easyuseAnimaFixedOriginalDraw) {
-    widget.__easyuseAnimaFixedOriginalDraw = widget.draw;
+  if (!widget.__easyuseAnimaExtendOriginalDraw) {
+    widget.__easyuseAnimaExtendOriginalDraw = widget.draw;
   }
 
-  widget.__easyuseAnimaFixedHidden = hidden;
+  widget.__easyuseAnimaExtendHidden = hidden;
   widget.hidden = hidden;
   if (hidden) {
     widget.computeSize = () => [0, 0];
     widget.draw = () => {};
   } else {
-    widget.computeSize = widget.__easyuseAnimaFixedOriginalComputeSize;
-    widget.draw = widget.__easyuseAnimaFixedOriginalDraw;
+    widget.computeSize = widget.__easyuseAnimaExtendOriginalComputeSize;
+    widget.draw = widget.__easyuseAnimaExtendOriginalDraw;
   }
 
   const input = findInputEl(widget);
@@ -971,45 +1059,45 @@ function setFixedWidgetHidden(widget, hidden) {
   }
 }
 
-function applyFixedSlotVisibility(node) {
-  if (!isFixedNode(node)) {
+function applyExtendSlotVisibility(node) {
+  if (!isExtendNode(node)) {
     return;
   }
-  const visible = fixedVisibleSlots(node);
-  for (const fieldName of FIXED_FIELD_NAMES) {
-    const shouldShow = fixedSlotShouldShow(node, fieldName);
+  const visible = extendVisibleSlots(node);
+  for (const fieldName of EXTEND_FIELD_NAMES) {
+    const shouldShow = extendSlotShouldShow(node, fieldName);
     if (shouldShow) {
       visible.add(fieldName);
     }
-    setFixedWidgetHidden(findWidget(node, fieldName), !shouldShow);
+    setExtendWidgetHidden(findWidget(node, fieldName), !shouldShow);
   }
-  writeFixedVisibleSlots(node, visible);
+  writeExtendVisibleSlots(node, visible);
 }
 
-function addNextFixedSlot(node, group) {
-  const visible = fixedVisibleSlots(node);
-  const next = group.fields.find((fieldName) => !fixedSlotShouldShow(node, fieldName));
+function addNextExtendSlot(node, group) {
+  const visible = extendVisibleSlots(node);
+  const next = group.fields.find((fieldName) => !extendSlotShouldShow(node, fieldName));
   if (!next) {
     return;
   }
   visible.add(next);
-  writeFixedVisibleSlots(node, visible);
-  applyFixedSlotVisibility(node);
-  renderFixedSlotControls(node);
+  writeExtendVisibleSlots(node, visible);
+  applyExtendSlotVisibility(node);
+  renderExtendSlotControls(node);
   refreshNodeSize(node);
 }
 
-function renderFixedSlotControls(node) {
-  const container = node.__easyuseAnimaFixedSlotControlsEl;
+function renderExtendSlotControls(node) {
+  const container = node.__easyuseAnimaExtendSlotControlsEl;
   if (!container) {
     return;
   }
   container.innerHTML = "";
   const row = document.createElement("div");
-  row.className = "easyuse-anima-fixed-slot-row";
-  for (const group of FIXED_SLOT_GROUPS) {
-    const shown = group.fields.filter((fieldName) => fixedSlotShouldShow(node, fieldName)).length;
-    const next = group.fields.find((fieldName) => !fixedSlotShouldShow(node, fieldName));
+  row.className = "easyuse-anima-extend-slot-row";
+  for (const group of EXTEND_SLOT_GROUPS) {
+    const shown = group.fields.filter((fieldName) => extendSlotShouldShow(node, fieldName)).length;
+    const next = group.fields.find((fieldName) => !extendSlotShouldShow(node, fieldName));
     const button = document.createElement("button");
     button.type = "button";
     button.textContent = `+ ${group.label} ${shown}/${group.fields.length}`;
@@ -1018,33 +1106,33 @@ function renderFixedSlotControls(node) {
     button.addEventListener("click", (event) => {
       event.preventDefault();
       event.stopPropagation();
-      addNextFixedSlot(node, group);
+      addNextExtendSlot(node, group);
     });
     row.append(button);
   }
   container.append(row);
 }
 
-function ensureFixedSlotControls(node) {
-  if (!isFixedNode(node)) {
+function ensureExtendSlotControls(node) {
+  if (!isExtendNode(node)) {
     return;
   }
-  ensureFixedSlotStyle();
-  if (!node.__easyuseAnimaFixedSlotControlsEl) {
+  ensureExtendSlotStyle();
+  if (!node.__easyuseAnimaExtendSlotControlsEl) {
     const container = document.createElement("div");
-    container.className = "easyuse-anima-fixed-slots";
-    node.__easyuseAnimaFixedSlotControlsEl = container;
-    node.addDOMWidget?.("easyuse_anima_fixed_slot_controls", "EasyUseAnimaFixedSlotControls", container, {
+    container.className = "easyuse-anima-extend-slots";
+    node.__easyuseAnimaExtendSlotControlsEl = container;
+    node.addDOMWidget?.("easyuse_anima_extend_slot_controls", "EasyUseAnimaExtendSlotControls", container, {
       serialize: false,
       hideOnZoom: false,
       getMinHeight: () => 30,
     });
   }
-  renderFixedSlotControls(node);
+  renderExtendSlotControls(node);
 }
 
 function studioDefaultHeight(widget) {
-  return FIXED_FIELD_HEIGHTS[widget.name] || FIELD_HEIGHTS[widget.name] || 72;
+  return EXTEND_FIELD_HEIGHTS[widget.name] || FIELD_HEIGHTS[widget.name] || 72;
 }
 
 function updateHighlight(node, widget, tokens = widget.__easyuseAnimaTokens || []) {
@@ -1071,23 +1159,20 @@ function enhanceResizableInput(node, widget) {
   }
 
   const defaultHeight = studioDefaultHeight(widget);
-  const readInputHeight = () => {
-    const styleHeight = Number.parseFloat(input.style.height || "");
-    return Math.round(input.offsetHeight || input.clientHeight || styleHeight || defaultHeight);
-  };
+  const minimumHeight = Math.min(defaultHeight, 54);
 
-  widget.__easyuseAnimaHeight = Math.max(defaultHeight, widget.__easyuseAnimaHeight || 0);
+  widget.__easyuseAnimaHeight = Math.max(minimumHeight, widget.__easyuseAnimaHeight || defaultHeight);
   input.style.boxSizing = "border-box";
   input.style.resize = "vertical";
   input.style.overflowY = "hidden";
-  input.style.minHeight = `${Math.min(defaultHeight, 54)}px`;
+  input.style.minHeight = `${minimumHeight}px`;
   input.style.height = `${widget.__easyuseAnimaHeight}px`;
 
   if (!widget.__easyuseAnimaStudioComputeWrapped) {
     const computeSize = widget.computeSize;
     widget.computeSize = function (width) {
-      const base = computeSize?.apply(this, arguments) || [width, defaultHeight];
-      return [base[0], Math.max(base[1], this.__easyuseAnimaHeight || defaultHeight)];
+      const base = computeSize?.apply(this, arguments) || [width, minimumHeight];
+      return [base[0], Math.max(base[1], this.__easyuseAnimaHeight || minimumHeight)];
     };
     widget.__easyuseAnimaStudioComputeWrapped = true;
   }
@@ -1095,18 +1180,13 @@ function enhanceResizableInput(node, widget) {
   const syncHeight = () => {
     const height = desiredTextareaHeight(
       input,
-      Math.max(readInputHeight(), widget.__easyuseAnimaHeight || 0),
-      defaultHeight,
+      Math.max(studioCurrentHeight(widget, input), widget.__easyuseAnimaHeight || 0),
+      minimumHeight,
     );
-    if (Math.abs(height - widget.__easyuseAnimaHeight) > 2) {
-      widget.__easyuseAnimaHeight = height;
-      input.style.height = `${height}px`;
-      refreshNodeSize(node);
-    }
-    updateHighlight(node, widget);
+    setStudioInputHeight(node, widget, height, true);
   };
 
-  updateHighlight(node, widget);
+  requestAnimationFrame(() => expandStudioInputToContent(node, widget, true));
   if (input.__easyuseAnimaStudioResizable) {
     return;
   }
@@ -1138,12 +1218,12 @@ function syncStudioValues(node, serialized = null) {
   if (!serialized || !Array.isArray(node.widgets) || !Array.isArray(serialized.widgets_values)) {
     return;
   }
-  if (isFixedNode(node)) {
-    applyFixedSlotVisibility(node);
+  if (isExtendNode(node)) {
+    applyExtendSlotVisibility(node);
     serialized.properties ||= {};
-    serialized.properties[FIXED_VISIBLE_SLOTS_PROPERTY] = [
-      ...fixedVisibleSlots(node),
-    ].filter((name) => FIXED_FIELD_NAMES.includes(name));
+    serialized.properties[EXTEND_VISIBLE_SLOTS_PROPERTY] = [
+      ...extendVisibleSlots(node),
+    ].filter((name) => EXTEND_FIELD_NAMES.includes(name));
   }
 
   for (const name of fieldNames) {
@@ -1234,7 +1314,7 @@ function hookStudioNode(node, attempt = 0) {
       continue;
     }
     restoreInputFromWidget(widget);
-    if (isFixedNode(node) && name === "naia_prompt_3") {
+    if (isExtendNode(node) && name === "naia_prompt_3") {
       input.readOnly = true;
       input.placeholder = "NAIA result";
       input.title = "Read-only NAIA result slot. Enable fill_naia_prompt to update it from NAIA.";
@@ -1271,9 +1351,9 @@ function hookStudioNode(node, attempt = 0) {
     updateField();
   }
 
-  if (isFixedNode(node)) {
-    applyFixedSlotVisibility(node);
-    ensureFixedSlotControls(node);
+  if (isExtendNode(node)) {
+    applyExtendSlotVisibility(node);
+    ensureExtendSlotControls(node);
   }
   ensureLegendWidget(node);
   refreshNodeSize(node);
@@ -1298,8 +1378,10 @@ function applyExecutedInputs(node, message) {
       widget.value = String(payload[name] ?? "");
       restoreInputFromWidget(widget);
       widget.__easyuseAnimaExecutedText = null;
+      expandStudioInputToContent(node, widget, true);
     } else {
       widget.__easyuseAnimaExecutedText = String(payload[name] ?? "");
+      expandStudioInputToContent(node, widget, true);
     }
   }
   if (slotPayload) {
@@ -2178,7 +2260,7 @@ app.registerExtension({
     if (
       nodeData.name !== NODE_TYPE
       && nodeData.name !== ADVANCED_NODE_TYPE
-      && nodeData.name !== FIXED_NODE_TYPE
+      && nodeData.name !== EXTEND_NODE_TYPE
     ) {
       return;
     }
@@ -2211,18 +2293,11 @@ app.registerExtension({
         syncAdvancedNodeSize(this);
         return result;
       }
-      if (isFixedNode(this)) {
-        applyFixedSlotVisibility(this);
-        renderFixedSlotControls(this);
+      if (isExtendNode(this)) {
+        applyExtendSlotVisibility(this);
+        renderExtendSlotControls(this);
       }
-      for (const name of studioFieldNames(this)) {
-        const widget = findWidget(this, name);
-        const input = findInputEl(widget);
-        if (input && widget.__easyuseAnimaHeight) {
-          input.style.height = `${widget.__easyuseAnimaHeight}px`;
-          updateHighlight(this, widget);
-        }
-      }
+      rebalanceStudioInputHeights(this);
       return result;
     };
 

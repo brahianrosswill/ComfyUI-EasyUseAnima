@@ -35,7 +35,7 @@ ADVANCED_FIELD_LABELS = {
     "general": "General Tags",
     "naia": "NAIA Prompt",
 }
-FIXED_PROMPT_SLOT_SPECS = [
+EXTEND_PROMPT_SLOT_SPECS = [
     ("quality_tags_1", "positive", "quality", "Quality Tags 1", DEFAULT_QUALITY_TAGS, 72),
     ("quality_tags_2", "positive", "quality", "Quality Tags 2", "", 72),
     ("naia_prompt_3", "positive", "general", "NAIA Prompt 3", "", 150),
@@ -52,8 +52,8 @@ FIXED_PROMPT_SLOT_SPECS = [
     ("negative_prompt_3", "negative", "general", "Negative Prompt 3", "", 120),
     ("negative_prompt_4", "negative", "general", "Negative Prompt 4", "", 120),
 ]
-FIXED_TIMEOUT = 30.0
-HTTP_TIMEOUT = FIXED_TIMEOUT + 5.0
+NAIA_REQUEST_TIMEOUT = 30.0
+HTTP_TIMEOUT = NAIA_REQUEST_TIMEOUT + 5.0
 
 NAI_1MP = 1024 * 1024
 LATENT_ALIGN = 8
@@ -1219,8 +1219,8 @@ class EasyUseAnimaPromptStudioAdvanced:
         }
 
 
-class EasyUseAnimaPromptStudioFixed:
-    """Fixed-socket Prompt Studio with numbered positive/negative prompt rows."""
+class EasyUseAnimaPromptStudioExtend:
+    """Extended Prompt Studio with numbered positive/negative prompt rows."""
 
     @classmethod
     def INPUT_TYPES(cls):
@@ -1244,7 +1244,7 @@ class EasyUseAnimaPromptStudioFixed:
                 "tooltip": "true: keep prompt correction trigger-like tags at the front where applicable.",
             }),
         }
-        for name, _pane, _field_type, label, default, height in FIXED_PROMPT_SLOT_SPECS:
+        for name, _pane, _field_type, label, default, height in EXTEND_PROMPT_SLOT_SPECS:
             required[name] = ("STRING", {
                 "multiline": True,
                 "default": default,
@@ -1288,13 +1288,13 @@ class EasyUseAnimaPromptStudioFixed:
         if _as_bool(fill_naia_prompt, False):
             return float("nan")
         return _stable_change_key({
-            "mode": "prompt_studio_fixed",
+            "mode": "prompt_studio_extend",
             "metadata_filter_words": resolve_metadata_filter_words(),
             "use_anima_mod_guidance": _as_bool(use_anima_mod_guidance, False),
             "pin_trigger_tags_to_front": _as_bool(pin_trigger_tags_to_front, False),
             **{
                 name: str(kwargs.get(name, ""))
-                for name, *_rest in FIXED_PROMPT_SLOT_SPECS
+                for name, *_rest in EXTEND_PROMPT_SLOT_SPECS
             },
         })
 
@@ -1335,7 +1335,7 @@ class EasyUseAnimaPromptStudioFixed:
     @staticmethod
     def _fields_from_slots(values: dict[str, str]) -> list[dict]:
         fields = []
-        for name, pane, field_type, label, _default, height in FIXED_PROMPT_SLOT_SPECS:
+        for name, pane, field_type, label, _default, height in EXTEND_PROMPT_SLOT_SPECS:
             text = str(values.get(name, "") or "")
             fields.append({
                 "id": name,
@@ -1369,7 +1369,7 @@ class EasyUseAnimaPromptStudioFixed:
     ):
         values = {
             name: str(slot_values.get(name, default) or "")
-            for name, _pane, _field_type, _label, default, _height in FIXED_PROMPT_SLOT_SPECS
+            for name, _pane, _field_type, _label, default, _height in EXTEND_PROMPT_SLOT_SPECS
         }
         live_fill_naia = _as_bool(fill_naia_prompt, False)
         metadata_fill_naia = live_fill_naia
@@ -1857,7 +1857,7 @@ class EasyUseAnimaNAIARandomPrompt:
         pp_kwargs: dict,
     ) -> dict:
         body = {
-            "timeout": FIXED_TIMEOUT,
+            "timeout": NAIA_REQUEST_TIMEOUT,
             "respect_naia_autogen": True,
             "force_naia_skip_generate": False,
         }

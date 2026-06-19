@@ -6,7 +6,7 @@ from .nodes import (
     EasyUseAnimaPromptCorrector,
     EasyUseAnimaPromptStudio,
     EasyUseAnimaPromptStudioAdvanced,
-    EasyUseAnimaPromptStudioFixed,
+    EasyUseAnimaPromptStudioExtend,
 )
 from . import api  # noqa: F401 - registers ComfyUI HTTP routes
 
@@ -17,7 +17,7 @@ NODE_CLASS_MAPPINGS = {
     "EasyUseAnimaPromptCorrector": EasyUseAnimaPromptCorrector,
     "EasyUseAnimaPromptStudio": EasyUseAnimaPromptStudio,
     "EasyUseAnimaPromptStudioAdvanced": EasyUseAnimaPromptStudioAdvanced,
-    "EasyUseAnimaPromptStudioFixed": EasyUseAnimaPromptStudioFixed,
+    "EasyUseAnimaPromptStudioExtend": EasyUseAnimaPromptStudioExtend,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
@@ -27,7 +27,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "EasyUseAnimaPromptCorrector": "Anima Prompt Corrector",
     "EasyUseAnimaPromptStudio": "Anima Prompt Studio",
     "EasyUseAnimaPromptStudioAdvanced": "Anima Prompt Studio Advanced",
-    "EasyUseAnimaPromptStudioFixed": "Anima Prompt Studio Fixed",
+    "EasyUseAnimaPromptStudioExtend": "Anima Prompt Studio Extend",
 }
 
 WEB_DIRECTORY = "./web"
