@@ -2074,6 +2074,23 @@ function advancedFieldDisplayText(node, field) {
   return String(field?.text || "");
 }
 
+function pruneDisconnectedAdvancedFieldInputValues(node) {
+  const values = node.__easyuseAnimaAdvancedFieldInputValues;
+  if (!values || typeof values !== "object") {
+    return;
+  }
+  const linkedNames = new Set(
+    (node.inputs || [])
+      .filter((input) => isAdvancedFieldInput(input) && input.link != null)
+      .map((input) => input.name),
+  );
+  for (const name of Object.keys(values)) {
+    if (!linkedNames.has(name)) {
+      delete values[name];
+    }
+  }
+}
+
 function advancedFieldLabel(field) {
   const base = ADVANCED_FIELD_LABELS[field.type] || "General Tags";
   return field.label && field.label !== base ? `${base} - ${field.label}` : base;
@@ -2726,6 +2743,24 @@ app.registerExtension({
       } finally {
         this.__easyuseAnimaHandlingResize = false;
       }
+    };
+
+    const onConnectionsChange = nodeType.prototype.onConnectionsChange;
+    nodeType.prototype.onConnectionsChange = function () {
+      const result = onConnectionsChange?.apply(this, arguments);
+      if (nodeData.name === ADVANCED_NODE_TYPE && !this.__easyuseAnimaHandlingConnectionsChange) {
+        this.__easyuseAnimaHandlingConnectionsChange = true;
+        requestAnimationFrame(() => {
+          try {
+            removeAdvancedInternalInputSockets(this);
+            pruneDisconnectedAdvancedFieldInputValues(this);
+            renderAdvancedEditor(this);
+          } finally {
+            this.__easyuseAnimaHandlingConnectionsChange = false;
+          }
+        });
+      }
+      return result;
     };
 
     const onSerialize = nodeType.prototype.onSerialize;
