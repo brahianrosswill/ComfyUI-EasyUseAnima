@@ -356,6 +356,85 @@ class PromptBuilderTests(unittest.TestCase):
             {"field_positive_general": "1girl, long hair"},
         )
 
+    def test_prompt_studio_advanced_trigger_field_is_socket_only_and_pinned(self):
+        fields = [
+            {
+                "id": "before",
+                "pane": "positive",
+                "type": "general",
+                "label": "General Tags",
+                "text": "1girl",
+                "height": 72,
+            },
+            {
+                "id": "trigger_words",
+                "pane": "positive",
+                "type": "trigger",
+                "label": "Trigger Words",
+                "text": "",
+                "height": 72,
+                "pin": True,
+            },
+            {
+                "id": "after",
+                "pane": "positive",
+                "type": "general",
+                "label": "General Tags",
+                "text": "long hair",
+                "height": 72,
+            },
+        ]
+        result = EasyUseAnimaPromptStudioAdvanced().build(
+            False,
+            True,
+            False,
+            False,
+            json.dumps(fields),
+            field_trigger_words="@model_trigger",
+        )
+
+        self.assertEqual(result["result"][0], "1girl, @model_trigger, long hair")
+        saved = json.loads(result["ui"]["prompt_studio_advanced"][0]["advanced_fields"])
+        self.assertEqual(saved[1]["type"], "trigger")
+        self.assertEqual(saved[1]["text"], "")
+        self.assertTrue(saved[1]["pin"])
+        self.assertEqual(
+            result["ui"]["prompt_studio_advanced"][0]["field_inputs"],
+            {"field_trigger_words": "@model_trigger"},
+        )
+
+    def test_prompt_studio_advanced_keeps_only_one_positive_trigger_field(self):
+        fields = [
+            {
+                "id": "trigger_a",
+                "pane": "positive",
+                "type": "trigger",
+                "label": "Trigger Words",
+                "text": "@a",
+                "height": 72,
+            },
+            {
+                "id": "trigger_b",
+                "pane": "positive",
+                "type": "trigger",
+                "label": "Trigger Words",
+                "text": "@b",
+                "height": 72,
+            },
+        ]
+        result = EasyUseAnimaPromptStudioAdvanced().build(
+            False,
+            True,
+            False,
+            False,
+            json.dumps(fields),
+        )
+
+        saved = json.loads(result["ui"]["prompt_studio_advanced"][0]["advanced_fields"])
+        trigger_fields = [field for field in saved if field["type"] == "trigger"]
+        self.assertEqual(len(trigger_fields), 1)
+        self.assertEqual(trigger_fields[0]["text"], "@a")
+
     def test_prompt_studio_advanced_naia_fill_stays_enabled_but_saved_metadata_is_off(self):
         fields = [
             {

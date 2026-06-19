@@ -118,13 +118,14 @@ const ADVANCED_CONTROL_WIDGETS = [
   },
   {
     name: "use_anima_mod_guidance",
-    label: "AMG",
+    label: "mod guidance",
     title: "Send positive quality fields to Anima Mod Guidance output.",
   },
   {
     name: "pin_trigger_tags_to_front",
     label: "Pin",
     title: "Keep positive artist/trigger fields at the front.",
+    showInControlBar: false,
   },
 ];
 const ADVANCED_WIDGET_INDEX = {
@@ -137,10 +138,11 @@ const ADVANCED_WIDGET_INDEX = {
 const ADVANCED_INTERNAL_WIDGET_NAMES = new Set(Object.keys(ADVANCED_WIDGET_INDEX));
 const ADVANCED_FIELDS_PROPERTY = "easyuse_anima_advanced_fields";
 const ADVANCED_FIELD_SOCKET_PREFIX = "field_";
-const ADVANCED_FIELD_TYPES = ["quality", "artist", "general", "naia"];
+const ADVANCED_FIELD_TYPES = ["quality", "artist", "trigger", "general", "naia"];
 const ADVANCED_FIELD_LABELS = {
   quality: "Quality Tags",
   artist: "Artist Tags",
+  trigger: "Trigger Words",
   general: "General Tags",
   naia: "NAIA Prompt",
 };
@@ -166,6 +168,16 @@ const ADVANCED_DEFAULT_FIELDS = [
     text: "",
     height: 72,
     enabled: true,
+  },
+  {
+    id: "positive_trigger",
+    pane: "positive",
+    type: "trigger",
+    label: "Trigger Words",
+    text: "",
+    height: 72,
+    enabled: true,
+    pin: true,
   },
   {
     id: "positive_general",
@@ -360,6 +372,10 @@ function ensureAdvancedStyle() {
       min-width: 78px;
       font-weight: 700;
     }
+    .easyuse-anima-field-tools button.easyuse-anima-trigger-pin {
+      min-width: 58px;
+      font-weight: 700;
+    }
     .easyuse-anima-field-tools button.is-on {
       border-color: rgba(96, 165, 250, 0.78);
       background: rgba(37, 99, 235, 0.58);
@@ -389,6 +405,11 @@ function ensureAdvancedStyle() {
     .easyuse-anima-advanced-field.is-naia textarea {
       border-style: dashed;
       background: rgba(15, 23, 42, 0.74);
+      cursor: default;
+    }
+    .easyuse-anima-advanced-field.is-trigger textarea {
+      border-style: dashed;
+      background: rgba(12, 20, 34, 0.78);
       cursor: default;
     }
     .easyuse-anima-empty-pane {
@@ -1844,7 +1865,7 @@ function removeAdvancedInternalInputSockets(node) {
 function normalizeAdvancedField(field, index = 0) {
   const pane = field?.pane === "negative" ? "negative" : "positive";
   let type = ADVANCED_FIELD_TYPES.includes(field?.type) ? field.type : "general";
-  if (pane === "negative" && type === "naia") {
+  if (pane === "negative" && (type === "naia" || type === "trigger")) {
     type = "general";
   }
   const label = String(field?.label || ADVANCED_FIELD_LABELS[type] || "General Tags");
@@ -1856,6 +1877,7 @@ function normalizeAdvancedField(field, index = 0) {
     text: String(field?.text || ""),
     height: Math.max(42, Math.round(Number(field?.height) || 72)),
     enabled: field?.enabled !== false,
+    pin: type === "trigger" ? field?.pin !== false : false,
   };
 }
 
@@ -1868,6 +1890,7 @@ function parseAdvancedFields(node) {
     if (Array.isArray(parsed) && parsed.length) {
       const fields = [];
       let seenNaia = false;
+      let seenTrigger = false;
       parsed.forEach((field, index) => {
         const normalized = normalizeAdvancedField(field, index);
         if (normalized.type === "naia") {
@@ -1875,6 +1898,13 @@ function parseAdvancedFields(node) {
             return;
           }
           seenNaia = true;
+          normalized.pane = "positive";
+        }
+        if (normalized.type === "trigger") {
+          if (seenTrigger) {
+            return;
+          }
+          seenTrigger = true;
           normalized.pane = "positive";
         }
         fields.push(normalized);
@@ -2102,6 +2132,11 @@ function hasPositiveNaia(node) {
     .some((field) => field.pane === "positive" && field.type === "naia");
 }
 
+function hasPositiveTrigger(node) {
+  return (node.__easyuseAnimaAdvancedFields || parseAdvancedFields(node))
+    .some((field) => field.pane === "positive" && field.type === "trigger");
+}
+
 function advancedEditorWidth(node) {
   return Math.max(280, Math.round((Number(node?.size?.[0]) || 360) - 24));
 }
@@ -2286,6 +2321,7 @@ function createAdvancedFieldElement(node, field) {
   const block = document.createElement("div");
   block.className = "easyuse-anima-advanced-field";
   block.classList.toggle("is-naia", field.type === "naia");
+  block.classList.toggle("is-trigger", field.type === "trigger");
   block.classList.toggle("is-disabled", field.enabled === false);
 
   const header = document.createElement("div");
@@ -2342,6 +2378,20 @@ function createAdvancedFieldElement(node, field) {
     },
   );
   toggleButton.classList.toggle("is-on", field.enabled !== false);
+  if (field.type === "trigger") {
+    const pinButton = addTool(
+      field.pin === false ? "Auto order" : "Pinned",
+      field.pin === false
+        ? "Let prompt correction place trigger words automatically."
+        : "Keep trigger words fixed before corrected prompt text.",
+      () => {
+        field.pin = field.pin === false;
+        writeAdvancedFields(node, fields, { render: true });
+      },
+    );
+    pinButton.classList.add("easyuse-anima-trigger-pin");
+    pinButton.classList.toggle("is-on", field.pin !== false);
+  }
   if (field.type === "naia") {
     const useNaiaWidget = findWidget(node, "use_naia");
     const linkedUseNaia = isWidgetInputLinked(node, "use_naia");
@@ -2370,17 +2420,20 @@ function createAdvancedFieldElement(node, field) {
 
   const textarea = document.createElement("textarea");
   const linked = advancedFieldInputLinked(node, field);
-  const readonly = linked || field.type === "naia";
+  const readonly = linked || field.type === "naia" || field.type === "trigger";
   textarea.value = advancedFieldDisplayText(node, field);
   textarea.style.height = `${field.height || 72}px`;
   textarea.style.overflowY = "hidden";
   textarea.placeholder = field.type === "naia"
     ? "NAIA result appears here after queue"
+    : field.type === "trigger" ? "Connect trigger_words STRING input"
     : field.type === "artist" ? "@artist_tag" : "prompt tags";
   textarea.readOnly = readonly;
   textarea.classList.toggle("is-linked", linked);
   textarea.title = field.type === "naia"
     ? "Read-only NAIA result field. Use Fill from NAIA and queue the workflow to update it."
+    : field.type === "trigger"
+      ? "Read-only trigger field. Connect a STRING trigger_words output to this field."
     : linked ? "Connected STRING input controls this field during execution." : "";
   textarea.dataset.easyuseAnimaAdvancedFieldId = field.id;
   const syncHeight = () => {
@@ -2418,6 +2471,9 @@ function addAdvancedField(node, pane, type) {
   if (type === "naia" && hasPositiveNaia(node)) {
     return;
   }
+  if (type === "trigger" && hasPositiveTrigger(node)) {
+    return;
+  }
   const nextId = `${pane}_${type}_${Date.now().toString(36)}`;
   fields.push({
     id: nextId,
@@ -2449,7 +2505,8 @@ function createAdvancedPane(node, pane, title) {
     const button = document.createElement("button");
     button.type = "button";
     button.textContent = label;
-    button.disabled = type === "naia" && hasPositiveNaia(node);
+    button.disabled = (type === "naia" && hasPositiveNaia(node))
+      || (type === "trigger" && hasPositiveTrigger(node));
     button.addEventListener("click", (event) => {
       event.preventDefault();
       event.stopPropagation();
@@ -2459,6 +2516,9 @@ function createAdvancedPane(node, pane, title) {
   };
   addButton("quality", "+ Quality");
   addButton("artist", "+ Artist");
+  if (pane === "positive") {
+    addButton("trigger", "+ Trigger");
+  }
   addButton("general", "+ General");
   if (pane === "positive") {
     addButton("naia", "+ NAIA");

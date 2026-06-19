@@ -27,11 +27,12 @@ DEFAULT_TRAILING_QUALITY_TAGS = (
     "location, (A highly aesthetic Pixiv style illustration, clean composition, "
     "high-quality digital art, detailed background, sharp focus on facial expressions.:0.6)"
 )
-ADVANCED_FIELD_TYPES = {"quality", "artist", "general", "naia"}
+ADVANCED_FIELD_TYPES = {"quality", "artist", "trigger", "general", "naia"}
 ADVANCED_FIELD_PANES = {"positive", "negative"}
 ADVANCED_FIELD_LABELS = {
     "quality": "Quality Tags",
     "artist": "Artist Tags",
+    "trigger": "Trigger Words",
     "general": "General Tags",
     "naia": "NAIA Prompt",
 }
@@ -235,6 +236,16 @@ def _advanced_default_fields() -> list[dict]:
             "enabled": True,
         },
         {
+            "id": "positive_trigger",
+            "pane": "positive",
+            "type": "trigger",
+            "label": ADVANCED_FIELD_LABELS["trigger"],
+            "text": "",
+            "height": 72,
+            "enabled": True,
+            "pin": True,
+        },
+        {
             "id": "positive_general",
             "pane": "positive",
             "type": "general",
@@ -290,6 +301,7 @@ def _normalize_advanced_fields(value: str | list | None) -> list[dict]:
 
     fields: list[dict] = []
     seen_naia = False
+    seen_trigger = False
     for index, item in enumerate(raw):
         if not isinstance(item, dict):
             continue
@@ -299,12 +311,17 @@ def _normalize_advanced_fields(value: str | list | None) -> list[dict]:
         field_type = str(item.get("type") or "general").strip().lower()
         if field_type not in ADVANCED_FIELD_TYPES:
             field_type = "general"
-        if pane == "negative" and field_type == "naia":
+        if pane == "negative" and field_type in {"naia", "trigger"}:
             field_type = "general"
         if field_type == "naia":
             if seen_naia:
                 continue
             seen_naia = True
+            pane = "positive"
+        if field_type == "trigger":
+            if seen_trigger:
+                continue
+            seen_trigger = True
             pane = "positive"
         default_label = ADVANCED_FIELD_LABELS.get(field_type, ADVANCED_FIELD_LABELS["general"])
         label = str(item.get("label") or default_label).strip() or default_label
@@ -319,6 +336,7 @@ def _normalize_advanced_fields(value: str | list | None) -> list[dict]:
             "text": str(item.get("text") or ""),
             "height": _as_advanced_height(item.get("height"), 72),
             "enabled": _as_bool(item.get("enabled"), True),
+            "pin": _as_bool(item.get("pin"), field_type == "trigger"),
         })
 
     return fields or _advanced_default_fields()
@@ -378,7 +396,7 @@ def _upsert_positive_naia_field(fields: list[dict], prompt: str) -> list[dict]:
 
 
 def _advanced_pane_parts(fields: list[dict], pane: str) -> dict[str, list[str]]:
-    parts = {"quality": [], "artist": [], "body": []}
+    parts = {"quality": [], "artist": [], "trigger_fixed": [], "trigger_auto": [], "body": []}
     for field in fields:
         if not _as_bool(field.get("enabled"), True):
             continue
@@ -390,9 +408,61 @@ def _advanced_pane_parts(fields: list[dict], pane: str) -> dict[str, list[str]]:
             parts["quality"].append(text)
         elif field_type == "artist":
             parts["artist"].append(text)
+        elif field_type == "trigger":
+            if _as_bool(field.get("pin"), True):
+                parts["trigger_fixed"].append(text)
+            else:
+                parts["trigger_auto"].append(text)
         else:
             parts["body"].append(text)
     return parts
+
+
+def _advanced_enabled_pane_fields(fields: list[dict], pane: str) -> list[dict]:
+    return [
+        field
+        for field in fields
+        if _as_bool(field.get("enabled"), True) and field.get("pane") == pane
+    ]
+
+
+def _correct_advanced_field_sequence(
+    fields: list[dict],
+    include_quality: bool,
+    artist_overrides: str,
+    force_pin_triggers: bool = False,
+) -> str:
+    chunks: list[str] = []
+    pending: list[str] = []
+
+    def flush_pending() -> None:
+        if not pending:
+            return
+        corrected = _correct_builder_prompt(
+            _join_prompt_tokens(*pending),
+            artist_overrides=artist_overrides,
+        )
+        if corrected:
+            chunks.append(corrected)
+        pending.clear()
+
+    for field in fields:
+        field_type = field.get("type")
+        text = str(field.get("text") or "")
+        if field_type == "quality" and not include_quality:
+            continue
+        if field_type == "trigger" and (
+            _as_bool(field.get("pin"), True) or force_pin_triggers
+        ):
+            flush_pending()
+            trigger_prompt = _join_prompt_tokens(text)
+            if trigger_prompt:
+                chunks.append(trigger_prompt)
+            continue
+        pending.append(text)
+
+    flush_pending()
+    return _join_prompt_tokens(*chunks)
 
 
 def _build_advanced_prompts(
@@ -401,30 +471,26 @@ def _build_advanced_prompts(
     pin_trigger_tags_to_front: bool,
 ) -> tuple[str, str, str, bool, str, str]:
     use_amg = _as_bool(use_anima_mod_guidance, False)
-    pin_triggers = _as_bool(pin_trigger_tags_to_front, False)
+    force_pin_triggers = _as_bool(pin_trigger_tags_to_front, False)
     positive = _advanced_pane_parts(fields, "positive")
     negative = _advanced_pane_parts(fields, "negative")
+    positive_fields = _advanced_enabled_pane_fields(fields, "positive")
 
     quality_prompt = _join_prompt_tokens(*positive["quality"])
     artist_prompt = _join_prompt_tokens(*positive["artist"])
-    body_prompt = _join_prompt_tokens(*positive["body"])
-
-    if pin_triggers:
-        metadata_body = _correct_builder_prompt(_join_prompt_tokens(quality_prompt, body_prompt))
-        regular_prompt = _join_prompt_tokens(artist_prompt, metadata_body)
-        amg_prompt = _join_prompt_tokens(artist_prompt, _correct_builder_prompt(body_prompt))
-        metadata_prompt = regular_prompt
-    else:
-        metadata_core = _correct_builder_prompt(
-            _join_prompt_tokens(quality_prompt, artist_prompt, body_prompt),
-            artist_overrides=artist_prompt,
-        )
-        metadata_prompt = metadata_core
-        amg_prompt = _correct_builder_prompt(
-            _join_prompt_tokens(artist_prompt, body_prompt),
-            artist_overrides=artist_prompt,
-        )
-        regular_prompt = metadata_prompt
+    regular_prompt = _correct_advanced_field_sequence(
+        positive_fields,
+        include_quality=True,
+        artist_overrides=artist_prompt,
+        force_pin_triggers=force_pin_triggers,
+    )
+    amg_prompt = _correct_advanced_field_sequence(
+        positive_fields,
+        include_quality=False,
+        artist_overrides=artist_prompt,
+        force_pin_triggers=force_pin_triggers,
+    )
+    metadata_prompt = regular_prompt
 
     negative_artist = _join_prompt_tokens(*negative["artist"])
     negative_prompt = _correct_builder_prompt(
@@ -1056,12 +1122,12 @@ class EasyUseAnimaPromptStudioAdvanced:
                     "default": False,
                     "tooltip": (
                         "true: positive output excludes quality fields and sends them "
-                        "through anima_mod_guidance_quality_tags."
+                        "through the mod guidance quality output."
                     ),
                 }),
                 "pin_trigger_tags_to_front": ("BOOLEAN", {
                     "default": False,
-                    "tooltip": "true: keep positive artist/trigger fields at the front.",
+                    "tooltip": "Legacy internal flag. Trigger field Pin buttons control trigger placement.",
                 }),
                 "advanced_fields": ("STRING", {
                     "multiline": True,
