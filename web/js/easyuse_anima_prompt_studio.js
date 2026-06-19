@@ -971,6 +971,84 @@ function visibleStudioWidgets(node) {
     });
 }
 
+function widgetHeight(widget, fallback = 24) {
+  const input = findInputEl(widget);
+  if (input && !widget.__easyuseAnimaExtendHidden) {
+    return studioCurrentHeight(widget, input) + STUDIO_WIDGET_VERTICAL_GAP;
+  }
+  const size = widget?.computeSize?.();
+  return Math.max(0, Number(size?.[1]) || Number(widget?.__height) || fallback);
+}
+
+function visibleExtendPromptWidgets(node) {
+  return EXTEND_FIELD_NAMES
+    .map((name) => findWidget(node, name))
+    .filter((widget) => widget && !widget.hidden && !widget.__easyuseAnimaExtendHidden);
+}
+
+function firstExtendPromptY(node) {
+  const visible = visibleExtendPromptWidgets(node);
+  const yValues = visible
+    .map((widget) => Number(widget.y))
+    .filter((value) => Number.isFinite(value) && value > 0);
+  if (yValues.length) {
+    return Math.min(...yValues);
+  }
+
+  const firstIndex = node.widgets?.findIndex((widget) => EXTEND_FIELD_NAMES.includes(widget?.name)) ?? -1;
+  if (firstIndex > 0) {
+    for (let index = firstIndex - 1; index >= 0; index -= 1) {
+      const widget = node.widgets[index];
+      if (!widget || widget.hidden || widget.__easyuseAnimaExtendHidden) {
+        continue;
+      }
+      const height = Number(widget.computeSize?.(node.size?.[0])?.[1]) || Number(widget.__height) || 24;
+      const y = Number(widget.y);
+      if (Number.isFinite(y)) {
+        return y + height + 6;
+      }
+    }
+  }
+  return 120;
+}
+
+function layoutExtendPromptWidgets(node) {
+  if (!isExtendNode(node)) {
+    return;
+  }
+
+  let cursorY = firstExtendPromptY(node);
+  const visible = visibleExtendPromptWidgets(node);
+  for (const widget of visible) {
+    widget.y = cursorY;
+    const input = findInputEl(widget);
+    if (input) {
+      input.style.height = `${studioCurrentHeight(widget, input)}px`;
+    }
+    cursorY += widgetHeight(widget, 72);
+  }
+
+  const controlsWidget = findWidget(node, "easyuse_anima_extend_slot_controls");
+  if (controlsWidget && !controlsWidget.hidden) {
+    refreshExtendSlotControlsSize(node);
+    controlsWidget.y = cursorY;
+    cursorY += Math.max(30, Number(controlsWidget.__height) || 30) + 8;
+  }
+
+  const legendWidget = findWidget(node, "easyuse_anima_color_legend");
+  if (legendWidget && !legendWidget.hidden) {
+    legendWidget.y = cursorY;
+    cursorY += Math.max(desiredLegendHeight(), Number(legendWidget.__height) || 0) + 8;
+  }
+
+  const minHeight = Math.ceil(cursorY + 8);
+  if (Number(node.size?.[1]) < minHeight) {
+    node.setSize?.([node.size?.[0] || node.computeSize?.()[0] || 300, minHeight]);
+  }
+  app.graph?.setDirtyCanvas(true, true);
+  app.canvas?.setDirty?.(true, true);
+}
+
 function rebalanceStudioInputHeights(node) {
   const widgets = visibleStudioWidgets(node);
   if (!widgets.length) {
@@ -1224,12 +1302,14 @@ function refreshExtendLayoutAfterSlotChange(node) {
   for (const widget of visibleStudioWidgets(node)) {
     expandStudioInputToContent(node, widget);
   }
+  layoutExtendPromptWidgets(node);
   refreshNodeSize(node, { immediate: true });
   requestAnimationFrame(() => {
     refreshExtendSlotControlsSize(node);
     for (const widget of visibleStudioWidgets(node)) {
       expandStudioInputToContent(node, widget);
     }
+    layoutExtendPromptWidgets(node);
     refreshNodeSize(node, { immediate: true });
   });
 }
@@ -1602,6 +1682,9 @@ function hookStudioNode(node, attempt = 0) {
     ensureExtendSlotControls(node);
   }
   ensureLegendWidget(node);
+  if (isExtendNode(node)) {
+    layoutExtendPromptWidgets(node);
+  }
   refreshNodeSize(node);
   if (pendingInput && attempt < 12) {
     setTimeout(() => hookStudioNode(node, attempt + 1), 80);
@@ -2547,6 +2630,9 @@ app.registerExtension({
         renderExtendSlotControls(this);
       }
       rebalanceStudioInputHeights(this);
+      if (isExtendNode(this)) {
+        layoutExtendPromptWidgets(this);
+      }
       return result;
     };
 
