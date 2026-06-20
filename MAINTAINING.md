@@ -12,7 +12,7 @@ This repository is prepared for future ComfyUI Manager / Comfy Registry registra
 
 ## Registry Rules
 
-- `pyproject.toml` `[project].name` is the Registry node id. Keep it aligned with the GitHub repository name: `ComfyUI-EasyUseAnima`.
+- `pyproject.toml` `[project].name` is the Registry node id. Use the lowercase repository-style name: `comfyui-easyuse-anima`.
 - `[tool.comfy].PublisherId` must match the Comfy Registry publisher id. It is currently set to `n0va39`.
 - Comfy Registry display name for the publisher is `N0VA`; this is informational. The publish identity is the publisher id `n0va39`.
 - Keep `[project.urls].Repository` pointed at the public GitHub repository.
@@ -55,7 +55,7 @@ Use this procedure when publishing a release to Comfy Registry / ComfyUI Manager
 ### 1. Prepare Metadata
 
 - Confirm `pyproject.toml` has:
-  - `[project].name = "ComfyUI-EasyUseAnima"`
+  - `[project].name = "comfyui-easyuse-anima"`
   - `[project].version = "X.Y.Z"` with semantic versioning.
   - `[project.urls].Repository = "https://github.com/n0va39/ComfyUI-EasyUseAnima"`
   - `[tool.comfy].PublisherId = "n0va39"`

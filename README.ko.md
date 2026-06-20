@@ -343,7 +343,7 @@ pip install -r ComfyUI-EasyUseAnima/requirements.txt
 ## ComfyUI Manager / Registry
 
 이 저장소는 향후 Comfy Registry 등록을 위한 `pyproject.toml` metadata를 포함합니다.
-Registry node id는 `ComfyUI-EasyUseAnima`입니다.
+Registry node id는 `comfyui-easyuse-anima`입니다.
 
 Registry에 publish하기 전에 `[tool.comfy].PublisherId`가 실제 Comfy Registry
 publisher id와 일치하는지 확인해야 합니다.
