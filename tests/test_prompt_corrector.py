@@ -854,6 +854,20 @@ class AutocompleteDatasetTests(unittest.TestCase):
         )
         self.assertEqual([token["weighted"] for token in classified["tokens"]], [True, True, True])
 
+    def test_prompt_escape_characters_are_ignored_for_tag_matching(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "tags.csv"
+            path.write_text(
+                'western comics (style),0,10,"[일반] western comics style"\n',
+                encoding="utf-8",
+            )
+
+            classified = classify_prompt_text(r"western comics \(style\)", path=path)
+
+        self.assertEqual(classified["tokens"][0]["base"], "western comics (style)")
+        self.assertEqual(classified["tokens"][0]["section"], "general")
+        self.assertTrue(classified["tokens"][0]["learned"])
+
     def test_unbalanced_parentheses_are_syntax_errors(self):
         classified = classify_prompt_text("(highres, absurdres")
 

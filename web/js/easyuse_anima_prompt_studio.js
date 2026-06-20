@@ -100,6 +100,7 @@ const LEGEND_COLUMNS = 2;
 const STUDIO_WIDGET_VERTICAL_GAP = 8;
 
 const WEIGHTED_TOKEN_RE = /^\((.*):[-+]?\d+(?:\.\d+)?\)$/s;
+const WEIGHT_NUMBER_COLOR = "#fb923c";
 const INLINE_SPACE_RE = /[ \t]+/g;
 const PROMPT_STUDIO_SETTINGS = {
   typoIndicator: true,
@@ -583,6 +584,7 @@ function escapeHtml(value) {
 function normalize(value) {
   return String(value ?? "")
     .normalize("NFKC")
+    .replace(/\\(.)/g, "$1")
     .replaceAll("_", " ")
     .toLocaleLowerCase()
     .replace(INLINE_SPACE_RE, " ")
@@ -596,6 +598,7 @@ function tokenBase(token) {
     value = weighted[1].trim();
   }
   value = value.replace(/:+$/, "").trim();
+  value = value.replace(/\\(.)/g, "$1");
   if (value.startsWith("@")) {
     return value.slice(1).trim();
   }
@@ -676,6 +679,25 @@ function tokenSpanHtml(text, token) {
     + "</span>";
 }
 
+function syntaxHtml(text) {
+  return escapeHtml(text).replace(
+    /(:)([-+]?\d+(?:\.\d+)?)(\))/g,
+    `$1<span style="color: ${WEIGHT_NUMBER_COLOR}; font-weight: 700">$2</span>$3`,
+  );
+}
+
+function weightedTokenSpanHtml(text, token) {
+  const match = findTokenMatch(text, 0, token);
+  if (!match) {
+    return tokenSpanHtml(text, token);
+  }
+  return [
+    syntaxHtml(text.slice(0, match.start)),
+    tokenSpanHtml(text.slice(match.start, match.end), token),
+    syntaxHtml(text.slice(match.end)),
+  ].join("");
+}
+
 function findTokenMatch(body, offset, token) {
   let start = offset;
   const skipWeightedSyntax = !!token?.weighted;
@@ -753,7 +775,7 @@ function renderSequentialBody(body, tokens, startIndex, consumed) {
     if (!match) {
       break;
     }
-    html.push(escapeHtml(body.slice(cursor, match.start)));
+    html.push(syntaxHtml(body.slice(cursor, match.start)));
     html.push(tokenSpanHtml(body.slice(match.start, match.end), token));
     consumed.add(token);
     cursor = match.end;
@@ -767,7 +789,7 @@ function renderSequentialBody(body, tokens, startIndex, consumed) {
   if (!matched) {
     return null;
   }
-  html.push(escapeHtml(body.slice(cursor)));
+  html.push(syntaxHtml(body.slice(cursor)));
   return { html: html.join(""), nextIndex: index };
 }
 
@@ -814,7 +836,9 @@ function renderHighlightedText(text, tokens) {
 
     if (token) {
       html.push(escapeHtml(leading));
-      html.push(tokenSpanHtml(body, token));
+      html.push(token?.weighted && WEIGHTED_TOKEN_RE.test(body)
+        ? weightedTokenSpanHtml(body, token)
+        : tokenSpanHtml(body, token));
       html.push(escapeHtml(trailing));
       continue;
     }

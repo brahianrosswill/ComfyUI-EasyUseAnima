@@ -95,6 +95,7 @@ def available_autocomplete_sources(selected: str | None = None) -> list[dict]:
 
 def _normalize(value: str) -> str:
     value = unicodedata.normalize("NFKC", str(value or ""))
+    value = re.sub(r"\\(.)", r"\1", value)
     value = value.replace("_", " ").casefold()
     value = _INLINE_SPACE_RE.sub(" ", value)
     return value.strip()
@@ -227,6 +228,7 @@ def _token_base(token: str) -> str:
     if weighted:
         token = weighted.group(1).strip(" ,\n\t")
     token = token.rstrip(":").strip()
+    token = re.sub(r"\\(.)", r"\1", token)
     if token.startswith("@"):
         return token[1:].strip()
     return token
