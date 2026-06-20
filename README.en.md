@@ -136,6 +136,16 @@ Outputs:
 
 This node is the flexible Prompt Studio variant for larger workflows.
 
+Example UI:
+
+![Anima Prompt Studio Advanced overview](docs/images/prompt-studio-advanced-overview.png)
+
+![Anima Prompt Studio Advanced inputs and controls](docs/images/prompt-studio-advanced-controls.png)
+
+![Anima Prompt Studio Advanced NAIA field](docs/images/prompt-studio-advanced-naia.png)
+
+![Anima Prompt Studio Advanced resolution bucket selector](docs/images/prompt-studio-advanced-resolution.png)
+
 Field model:
 
 - Positive and negative prompts are edited as separate field groups.
@@ -199,6 +209,14 @@ Outputs:
 - `profile_index`
 
 This node stores reusable LoRA/style profiles for ANIMA workflows.
+
+Example UI:
+
+![Anima LoRA Preset node](docs/images/lora-preset-node.png)
+
+![Anima LoRA Preset LoRA search](docs/images/lora-preset-search.png)
+
+![Anima LoRA Preset profile load](docs/images/lora-preset-profile-load.png)
 
 Main behavior:
 

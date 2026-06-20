@@ -138,6 +138,16 @@ UI에서 편집하기 위한 기능을 추가한 버전입니다.
 
 큰 워크플로우를 위한 확장형 Prompt Studio 노드입니다.
 
+화면 예시:
+
+![Anima Prompt Studio Advanced 전체 화면](docs/images/prompt-studio-advanced-overview.png)
+
+![Anima Prompt Studio Advanced 입력과 상단 설정](docs/images/prompt-studio-advanced-controls.png)
+
+![Anima Prompt Studio Advanced NAIA 필드](docs/images/prompt-studio-advanced-naia.png)
+
+![Anima Prompt Studio Advanced 해상도 버켓 선택](docs/images/prompt-studio-advanced-resolution.png)
+
 필드 구조:
 
 - positive prompt와 negative prompt를 별도 field group으로 편집합니다.
@@ -202,6 +212,14 @@ NAIA 동작:
 - `profile_index`
 
 ANIMA 워크플로우에서 재사용할 LoRA/style profile을 저장하는 노드입니다.
+
+화면 예시:
+
+![Anima LoRA Preset 노드](docs/images/lora-preset-node.png)
+
+![Anima LoRA Preset LoRA 검색](docs/images/lora-preset-search.png)
+
+![Anima LoRA Preset profile 불러오기](docs/images/lora-preset-profile-load.png)
 
 주요 동작:
 
