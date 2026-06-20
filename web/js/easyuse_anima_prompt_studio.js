@@ -2135,7 +2135,7 @@ function collectAdvancedEditorFields(node) {
   editor.querySelectorAll("textarea[data-easyuse-anima-advanced-field-id]").forEach((textarea) => {
     const id = textarea.dataset.easyuseAnimaAdvancedFieldId;
     const field = byId.get(id);
-    if (!field || advancedFieldInputLinked(node, field)) {
+    if (!field) {
       return;
     }
     field.text = textarea.value;
@@ -2304,6 +2304,25 @@ function advancedFieldDisplayText(node, field) {
     return String(values[name] ?? "");
   }
   return String(field?.text || "");
+}
+
+function mergeAdvancedFieldInputValues(node, fields, values) {
+  if (!values || typeof values !== "object" || !Array.isArray(fields)) {
+    return false;
+  }
+  let changed = false;
+  for (const field of fields) {
+    const name = advancedFieldInputName(field);
+    if (!Object.prototype.hasOwnProperty.call(values, name)) {
+      continue;
+    }
+    const text = String(values[name] ?? "");
+    if (field.text !== text) {
+      field.text = text;
+      changed = true;
+    }
+  }
+  return changed;
 }
 
 function pruneDisconnectedAdvancedFieldInputValues(node) {
@@ -2670,7 +2689,7 @@ function createAdvancedFieldElement(node, field) {
 
   const textarea = document.createElement("textarea");
   const linked = advancedFieldInputLinked(node, field);
-  const readonly = linked || field.type === "naia" || field.type === "trigger";
+  const inputName = advancedFieldInputName(field);
   textarea.value = advancedFieldDisplayText(node, field);
   textarea.style.height = `${field.height || 72}px`;
   textarea.style.overflowY = "hidden";
@@ -2678,13 +2697,13 @@ function createAdvancedFieldElement(node, field) {
     ? "NAIA result appears here after queue"
     : field.type === "trigger" ? "Connect trigger_words STRING input"
     : field.type === "artist" ? "@artist_tag" : "prompt tags";
-  textarea.readOnly = readonly;
+  textarea.readOnly = false;
   textarea.classList.toggle("is-linked", linked);
   textarea.title = field.type === "naia"
-    ? "Read-only NAIA result field. Use Fill from NAIA and queue the workflow to update it."
+    ? "Editable NAIA result field. Fill from NAIA can overwrite it on the next queue."
     : field.type === "trigger"
-      ? "Read-only trigger field. Connect a STRING trigger_words output to this field."
-    : linked ? "Connected STRING input controls this field during execution." : "";
+      ? "Editable trigger field. A connected STRING input can overwrite it on the next queue."
+    : linked ? "Editable cached value. The connected STRING input can overwrite it on the next queue." : "";
   textarea.dataset.easyuseAnimaAdvancedFieldId = field.id;
   const updateFieldHighlight = debounce(() => {
     scheduleAdvancedFieldHighlight(node, field, textarea);
@@ -2705,8 +2724,9 @@ function createAdvancedFieldElement(node, field) {
     syncAdvancedNodeSize(node);
   };
   textarea.addEventListener("input", () => {
-    if (readonly) {
-      return;
+    if (linked) {
+      node.__easyuseAnimaAdvancedFieldInputValues ||= {};
+      node.__easyuseAnimaAdvancedFieldInputValues[inputName] = textarea.value;
     }
     field.text = textarea.value;
     updateAdvancedFieldHighlight(node, field, textarea);
@@ -2891,6 +2911,12 @@ function applyAdvancedExecutedInputs(node, message) {
   if (widget && payload.advanced_fields != null) {
     widget.value = String(payload.advanced_fields);
     syncAdvancedFieldsBackup(node, widget.value);
+  }
+  const fields = parseAdvancedFields(node);
+  if (mergeAdvancedFieldInputValues(node, fields, node.__easyuseAnimaAdvancedFieldInputValues)) {
+    writeAdvancedFields(node, fields);
+  } else {
+    node.__easyuseAnimaAdvancedFields = fields;
   }
   const useNaia = findWidget(node, "use_naia");
   if (useNaia && payload.use_naia != null) {
