@@ -10,6 +10,7 @@ except ImportError:
 SETTINGS_FILE = PACKAGE_DATA_DIR / "settings.json"
 
 DEFAULT_SETTINGS = {
+    "ui.language": "en",
     "prompt.metadata_filter_words": "",
     "autocomplete.source": "localsmile_kr_wiki",
     "autocomplete.limit": "20",
@@ -90,6 +91,7 @@ def save_setting(key: str, value) -> dict:
 def public_settings() -> dict:
     settings = get_settings()
     return {
+        "ui.language": settings.get("ui.language", DEFAULT_SETTINGS["ui.language"]),
         "prompt.metadata_filter_words": settings.get("prompt.metadata_filter_words", ""),
         "autocomplete.source": settings.get(
             "autocomplete.source",

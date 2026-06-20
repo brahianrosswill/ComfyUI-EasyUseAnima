@@ -811,6 +811,7 @@ class SettingsTests(unittest.TestCase):
         self.assertEqual(
             set(settings),
             {
+                "ui.language",
                 "prompt.metadata_filter_words",
                 "autocomplete.source",
                 "autocomplete.limit",

@@ -41,18 +41,18 @@ async function getAutocompleteStatus() {
 const autocompletePanels = new Set();
 
 const PROMPT_STUDIO_COLOR_DEFAULTS = {
-  quality: { label: "품질", color: "#facc15" },
-  safety: { label: "등급", color: "#38bdf8" },
-  year: { label: "연도", color: "#2dd4bf" },
-  count: { label: "인원수", color: "#60a5fa" },
-  character: { label: "캐릭터", color: "#f472b6" },
-  artist: { label: "작가", color: "#a78bfa" },
-  copyright: { label: "작품", color: "#fb923c" },
-  general: { label: "학습 태그", color: "#4ade80" },
-  meta: { label: "메타", color: "#94a3b8" },
-  natural: { label: "자연어", color: "#cbd5e1" },
-  artist_unknown: { label: "미등록 작가", color: "#f87171" },
-  unknown: { label: "미확인", color: "#cbd5e1" },
+  quality: { label: { en: "Quality", ko: "품질" }, color: "#facc15" },
+  safety: { label: { en: "Rating", ko: "등급" }, color: "#38bdf8" },
+  year: { label: { en: "Year", ko: "연도" }, color: "#2dd4bf" },
+  count: { label: { en: "Count", ko: "인원수" }, color: "#60a5fa" },
+  character: { label: { en: "Character", ko: "캐릭터" }, color: "#f472b6" },
+  artist: { label: { en: "Artist", ko: "작가" }, color: "#a78bfa" },
+  copyright: { label: { en: "Copyright", ko: "작품" }, color: "#fb923c" },
+  general: { label: { en: "Trained tag", ko: "학습 태그" }, color: "#4ade80" },
+  meta: { label: { en: "Meta", ko: "메타" }, color: "#94a3b8" },
+  natural: { label: { en: "Natural language", ko: "자연어" }, color: "#cbd5e1" },
+  artist_unknown: { label: { en: "Unregistered artist", ko: "미등록 작가" }, color: "#f87171" },
+  unknown: { label: { en: "Unknown", ko: "미확인" }, color: "#cbd5e1" },
 };
 
 const NAIA_PREPROCESSING_OPTIONS = [
@@ -84,6 +84,111 @@ const SETTINGS_INPUT_STYLE =
 const SETTINGS_STATUS_STYLE = "opacity: 0.76; font-size: 0.92em;";
 const autoSaveTimers = new Map();
 
+const SETTINGS_TEXT = {
+  en: {
+    autoSave: "Auto-save enabled",
+    saving: "Saving...",
+    saved: "Saved automatically",
+    current: "Current",
+    saveFailed: "Save failed",
+    languageTitle: "Settings language",
+    languageGuide: "Controls labels inside EasyUse Anima settings panels. The ComfyUI settings list itself may need a browser refresh.",
+    languageLabel: "Language",
+    english: "English",
+    korean: "Korean",
+    promptMetadataTitle: "Prompt metadata",
+    promptMetadataGuide: "Controls that affect generated prompt text or metadata-only output.",
+    metadataFilterGuide: "Comma- or newline-separated prompt tags to remove only from Anima Prompt Builder metadata_prompt. The normal prompt output is not filtered.",
+    noFilterWords: "no filter words",
+    filterWords: "filter words",
+    promptStudioGuide: "Controls Prompt Studio tag highlighting. Colors apply to both highlighted prompt text and the color legend.",
+    typoIndicators: "Show typo indicators for unregistered artist / unknown tags",
+    naiaGeneralAutoToggle: "When Advanced NAIA is enabled, disable General fields above the NAIA field and re-enable them when NAIA is disabled",
+    resetColors: "Reset Colors",
+    loraPresetTitle: "LoRA preset",
+    loraPresetGuide: "Display options for Anima LoRA Preset.",
+    loraDisplayGuide: "Controls how LoRA names are displayed inside Anima LoRA Preset rows.",
+    loraDisplay: "LoRA display",
+    nameOnly: "Name only",
+    fullPath: "Full path",
+    naiaBridgeTitle: "NAIA bridge",
+    naiaBridgeGuide: "Connection and Prompt Engineering override settings used by Anima NAIA Random Prompt.",
+    naiaSettingsGuide: "Controls Anima NAIA Random Prompt connection and Prompt Engineering override options. These values replace the advanced NAIA options that used to live on the node.",
+    useDesktopNaia: "Use NAIA desktop Prompt Engineering settings",
+    preprocessingOptions: "Preprocessing options",
+    desktopSettings: "desktop settings",
+    preprocessingOverrides: "preprocessing overrides",
+    set: "set",
+    empty: "empty",
+  },
+  ko: {
+    autoSave: "자동 저장 사용 중",
+    saving: "저장 중...",
+    saved: "자동 저장됨",
+    current: "현재",
+    saveFailed: "저장 실패",
+    languageTitle: "설정 언어",
+    languageGuide: "EasyUse Anima 설정 패널 내부 라벨 언어를 바꿉니다. ComfyUI 설정 목록 이름은 브라우저 새로고침이 필요할 수 있습니다.",
+    languageLabel: "언어",
+    english: "영어",
+    korean: "한국어",
+    promptMetadataTitle: "프롬프트 메타데이터",
+    promptMetadataGuide: "생성 프롬프트 텍스트 또는 metadata 전용 출력에 영향을 주는 설정입니다.",
+    metadataFilterGuide: "Anima Prompt Builder metadata_prompt에서만 제거할 태그를 쉼표나 줄바꿈으로 입력합니다. 일반 prompt 출력에는 적용되지 않습니다.",
+    noFilterWords: "필터 단어 없음",
+    filterWords: "필터 단어",
+    promptStudioGuide: "Prompt Studio 태그 하이라이트를 제어합니다. 색상은 입력 텍스트와 범례에 같이 적용됩니다.",
+    typoIndicators: "미등록 작가 / 미확인 태그 오타 표시",
+    naiaGeneralAutoToggle: "Advanced NAIA가 켜지면 NAIA 위쪽 General field를 끄고, NAIA가 꺼지면 다시 켭니다",
+    resetColors: "색상 초기화",
+    loraPresetTitle: "LoRA 프리셋",
+    loraPresetGuide: "Anima LoRA Preset 표시 옵션입니다.",
+    loraDisplayGuide: "Anima LoRA Preset 행에서 LoRA 이름을 표시하는 방식을 제어합니다.",
+    loraDisplay: "LoRA 표시",
+    nameOnly: "이름만",
+    fullPath: "전체 경로",
+    naiaBridgeTitle: "NAIA 브리지",
+    naiaBridgeGuide: "Anima NAIA Random Prompt에 쓰는 연결 및 Prompt Engineering override 설정입니다.",
+    naiaSettingsGuide: "Anima NAIA Random Prompt 연결과 Prompt Engineering override 옵션을 제어합니다. 기존에 노드에 있던 고급 NAIA 옵션을 대체합니다.",
+    useDesktopNaia: "NAIA 데스크톱 Prompt Engineering 설정 사용",
+    preprocessingOptions: "전처리 옵션",
+    desktopSettings: "데스크톱 설정",
+    preprocessingOverrides: "전처리 override",
+    set: "입력됨",
+    empty: "비어 있음",
+  },
+};
+
+function currentSettings(settings = {}) {
+  return {
+    ...settings,
+    ...(window.__easyuseAnimaSettings || {}),
+  };
+}
+
+function settingsLanguage(settings = {}) {
+  const language = String(currentSettings(settings)["ui.language"] || "en").toLowerCase();
+  return language === "ko" ? "ko" : "en";
+}
+
+function textFor(settings, key) {
+  const language = settingsLanguage(settings);
+  return SETTINGS_TEXT[language]?.[key] || SETTINGS_TEXT.en[key] || key;
+}
+
+function colorLabel(item, settings = {}) {
+  const language = settingsLanguage(settings);
+  return item.label?.[language] || item.label?.en || "";
+}
+
+function mergeSettingCache(settings = {}) {
+  window.__easyuseAnimaSettings = {
+    ...(window.__easyuseAnimaSettings || {}),
+    ...settings,
+  };
+  return window.__easyuseAnimaSettings;
+}
+
 function currentValue(text) {
   const value = document.createElement("div");
   value.textContent = text;
@@ -91,7 +196,7 @@ function currentValue(text) {
   return value;
 }
 
-function statusLine(initialText = "Auto-save enabled") {
+function statusLine(initialText = textFor({}, "autoSave")) {
   const status = document.createElement("span");
   status.textContent = initialText;
   status.style.cssText = SETTINGS_STATUS_STYLE;
@@ -115,18 +220,19 @@ function updateSettingCache(key, value) {
 async function saveSettingAndNotify(key, value, status = null) {
   try {
     if (status) {
-      setStatus(status, "Saving...", "#64748b");
+      setStatus(status, textFor({}, "saving"), "#64748b");
     }
     const data = await saveSetting(key, value);
+    mergeSettingCache(data);
     updateSettingCache(key, value);
     window.dispatchEvent(new CustomEvent("easyuse-anima-settings-updated", { detail: data }));
     if (status) {
-      setStatus(status, "Saved automatically", "#16a34a");
+      setStatus(status, textFor({}, "saved"), "#16a34a");
     }
     return data;
   } catch (error) {
     if (status) {
-      setStatus(status, `Save failed: ${error.message || error}`, "#dc2626");
+      setStatus(status, `${textFor({}, "saveFailed")}: ${error.message || error}`, "#dc2626");
     }
     throw error;
   }
@@ -166,13 +272,61 @@ function sectionHeader(title, description) {
   return container;
 }
 
-function metadataFilterEditor(initialValue = "") {
+function languageEditor(settings = {}) {
+  settings = currentSettings(settings);
   const container = document.createElement("div");
   container.style.cssText = SETTINGS_PANEL_STYLE;
 
   const guide = document.createElement("div");
-  guide.textContent =
-    "Comma- or newline-separated prompt tags to remove only from Anima Prompt Builder metadata_prompt. The normal prompt output is not filtered.";
+  guide.textContent = textFor(settings, "languageGuide");
+  guide.style.cssText = "opacity: 0.78;";
+  container.append(guide);
+
+  const row = document.createElement("div");
+  row.style.cssText = SETTINGS_ROW_STYLE;
+  const label = document.createElement("label");
+  label.style.cssText = SETTINGS_FIELD_STYLE;
+  const text = document.createElement("span");
+  text.textContent = textFor(settings, "languageLabel");
+  const select = document.createElement("select");
+  select.style.cssText = SETTINGS_INPUT_STYLE;
+  for (const [value, labelText] of [
+    ["en", textFor(settings, "english")],
+    ["ko", textFor(settings, "korean")],
+  ]) {
+    const option = document.createElement("option");
+    option.value = value;
+    option.textContent = labelText;
+    option.selected = settingsLanguage(settings) === value;
+    select.append(option);
+  }
+  label.append(text, select);
+
+  const current = currentValue("");
+  const status = document.createElement("span");
+  status.style.cssText = SETTINGS_STATUS_STYLE;
+  const refreshCurrent = () => {
+    current.textContent = `${textFor(settings, "current")}: ${select.selectedOptions[0]?.textContent || select.value}`;
+  };
+  refreshCurrent();
+  select.addEventListener("change", () => {
+    updateSettingCache("ui.language", select.value);
+    refreshCurrent();
+    saveSettingAndNotify("ui.language", select.value, status).catch(() => {});
+  });
+
+  row.append(label, status);
+  container.append(row, current);
+  return container;
+}
+
+function metadataFilterEditor(initialValue = "") {
+  const settings = currentSettings();
+  const container = document.createElement("div");
+  container.style.cssText = SETTINGS_PANEL_STYLE;
+
+  const guide = document.createElement("div");
+  guide.textContent = textFor(settings, "metadataFilterGuide");
   guide.style.cssText = "opacity: 0.78;";
   container.append(guide);
 
@@ -193,7 +347,8 @@ function metadataFilterEditor(initialValue = "") {
       .map((value) => value.trim())
       .filter(Boolean)
       .length;
-    current.textContent = `Current: ${count ? `${count} filter words` : "no filter words"}`;
+    current.textContent =
+      `${textFor(settings, "current")}: ${count ? `${count} ${textFor(settings, "filterWords")}` : textFor(settings, "noFilterWords")}`;
   };
   refreshCurrent();
   textarea.addEventListener("input", () => {
@@ -216,12 +371,12 @@ function parseColorSettings(value = "") {
 }
 
 function promptStudioEditor(settings = {}) {
+  settings = currentSettings(settings);
   const container = document.createElement("div");
   container.style.cssText = SETTINGS_PANEL_STYLE;
 
   const guide = document.createElement("div");
-  guide.textContent =
-    "Controls Prompt Studio tag highlighting. Colors apply to both highlighted prompt text and the color legend.";
+  guide.textContent = textFor(settings, "promptStudioGuide");
   guide.style.cssText = "opacity: 0.78;";
   container.append(guide);
 
@@ -231,7 +386,7 @@ function promptStudioEditor(settings = {}) {
   typoToggle.type = "checkbox";
   typoToggle.checked = settings["prompt_studio.typo_indicator"] !== "false";
   const typoText = document.createElement("span");
-  typoText.textContent = "Show typo indicators for unregistered artist / unknown tags";
+  typoText.textContent = textFor(settings, "typoIndicators");
   typoRow.append(typoToggle, typoText);
   container.append(typoRow);
 
@@ -241,8 +396,7 @@ function promptStudioEditor(settings = {}) {
   naiaGeneralToggle.type = "checkbox";
   naiaGeneralToggle.checked = settings["prompt_studio.naia_general_above_auto_toggle"] === "true";
   const naiaGeneralText = document.createElement("span");
-  naiaGeneralText.textContent =
-    "When Advanced NAIA is enabled, disable General fields above the NAIA field and re-enable them when NAIA is disabled";
+  naiaGeneralText.textContent = textFor(settings, "naiaGeneralAutoToggle");
   naiaGeneralText.style.cssText = "min-width: min(100%, 280px);";
   naiaGeneralRow.append(naiaGeneralToggle, naiaGeneralText);
   container.append(naiaGeneralRow);
@@ -260,7 +414,7 @@ function promptStudioEditor(settings = {}) {
     input.value = colors[key] || item.color;
     input.style.cssText = "width: 34px; height: 24px; padding: 0;";
     const text = document.createElement("span");
-    text.textContent = item.label;
+    text.textContent = colorLabel(item, settings);
     label.append(input, text);
     grid.append(label);
     colorInputs.set(key, input);
@@ -271,7 +425,7 @@ function promptStudioEditor(settings = {}) {
   controls.style.cssText = SETTINGS_ROW_STYLE;
 
   const resetButton = document.createElement("button");
-  resetButton.textContent = "Reset Colors";
+  resetButton.textContent = textFor(settings, "resetColors");
   resetButton.style.cssText = "padding: 5px 10px; cursor: pointer;";
 
   const current = currentValue("");
@@ -288,7 +442,7 @@ function promptStudioEditor(settings = {}) {
 
   const refreshCurrent = () => {
     current.textContent =
-      `Current: typo ${formatOnOff(typoToggle.checked)}, ` +
+      `${textFor(settings, "current")}: typo ${formatOnOff(typoToggle.checked)}, ` +
       `NAIA general auto-toggle ${formatOnOff(naiaGeneralToggle.checked)}`;
   };
 
@@ -326,11 +480,12 @@ function promptStudioEditor(settings = {}) {
 }
 
 function loraPresetEditor(settings = {}) {
+  settings = currentSettings(settings);
   const container = document.createElement("div");
   container.style.cssText = SETTINGS_PANEL_STYLE;
 
   const guide = document.createElement("div");
-  guide.textContent = "Controls how LoRA names are displayed inside Anima LoRA Preset rows.";
+  guide.textContent = textFor(settings, "loraDisplayGuide");
   guide.style.cssText = "opacity: 0.78;";
   container.append(guide);
 
@@ -340,12 +495,12 @@ function loraPresetEditor(settings = {}) {
   const label = document.createElement("label");
   label.style.cssText = SETTINGS_FIELD_STYLE;
   const text = document.createElement("span");
-  text.textContent = "LoRA display";
+  text.textContent = textFor(settings, "loraDisplay");
   const select = document.createElement("select");
   select.style.cssText = SETTINGS_INPUT_STYLE;
   for (const [value, labelText] of [
-    ["name", "Name only"],
-    ["path", "Full path"],
+    ["name", textFor(settings, "nameOnly")],
+    ["path", textFor(settings, "fullPath")],
   ]) {
     const option = document.createElement("option");
     option.value = value;
@@ -360,7 +515,7 @@ function loraPresetEditor(settings = {}) {
   status.style.cssText = SETTINGS_STATUS_STYLE;
 
   const refreshCurrent = () => {
-    current.textContent = `Current: ${select.selectedOptions[0]?.textContent || select.value}`;
+    current.textContent = `${textFor(settings, "current")}: ${select.selectedOptions[0]?.textContent || select.value}`;
   };
   refreshCurrent();
   select.addEventListener("change", () => {
@@ -374,12 +529,12 @@ function loraPresetEditor(settings = {}) {
 }
 
 function naiaSettingsEditor(settings = {}) {
+  settings = currentSettings(settings);
   const container = document.createElement("div");
   container.style.cssText = SETTINGS_PANEL_STYLE;
 
   const guide = document.createElement("div");
-  guide.textContent =
-    "Controls Anima NAIA Random Prompt connection and Prompt Engineering override options. These values replace the advanced NAIA options that used to live on the node.";
+  guide.textContent = textFor(settings, "naiaSettingsGuide");
   guide.style.cssText = "opacity: 0.78;";
   container.append(guide);
 
@@ -417,34 +572,34 @@ function naiaSettingsEditor(settings = {}) {
   useSettingsToggle.type = "checkbox";
   useSettingsToggle.checked = settings["naia.use_naia_settings"] !== "false";
   const useSettingsText = document.createElement("span");
-  useSettingsText.textContent = "Use NAIA desktop Prompt Engineering settings";
+  useSettingsText.textContent = textFor(settings, "useDesktopNaia");
   useSettingsRow.append(useSettingsToggle, useSettingsText);
   container.append(useSettingsRow);
 
-  const textGrid = document.createElement("div");
-  textGrid.style.cssText = "display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 8px; width: 100%;";
-  const textareas = new Map();
+  const textStack = document.createElement("div");
+  textStack.style.cssText = "display: flex; flex-direction: column; gap: 6px; width: 100%;";
+  const promptInputs = new Map();
   for (const [key, labelText] of [
     ["pre_prompt", "Pre prompt"],
     ["post_prompt", "Post prompt"],
     ["auto_hide", "Auto hide"],
   ]) {
     const label = document.createElement("label");
-    label.style.cssText = "display: flex; flex-direction: column; gap: 4px;";
+    label.style.cssText = "display: grid; grid-template-columns: 94px minmax(0, 1fr); align-items: center; gap: 8px;";
     const text = document.createElement("span");
     text.textContent = labelText;
-    const textarea = document.createElement("textarea");
-    textarea.value = settings[`naia.${key}`] || "";
-    textarea.rows = 4;
-    textarea.style.cssText = "box-sizing: border-box; width: 100%; min-height: 76px; resize: vertical;";
-    label.append(text, textarea);
-    textGrid.append(label);
-    textareas.set(key, textarea);
+    const input = document.createElement("input");
+    input.type = "text";
+    input.value = settings[`naia.${key}`] || "";
+    input.style.cssText = SETTINGS_INPUT_STYLE;
+    label.append(text, input);
+    textStack.append(label);
+    promptInputs.set(key, input);
   }
-  container.append(textGrid);
+  container.append(textStack);
 
   const ppTitle = document.createElement("div");
-  ppTitle.textContent = "Preprocessing options";
+  ppTitle.textContent = textFor(settings, "preprocessingOptions");
   ppTitle.style.cssText = "font-weight: 700;";
   container.append(ppTitle);
 
@@ -487,14 +642,14 @@ function naiaSettingsEditor(settings = {}) {
     return port;
   };
   const refreshCurrent = () => {
-    const promptState = [...textareas.entries()]
-      .map(([key, textarea]) => `${key.replace("_", " ")} ${textarea.value.trim() ? "set" : "empty"}`)
+    const promptState = [...promptInputs.entries()]
+      .map(([key, input]) => `${key.replace("_", " ")} ${input.value.trim() ? textFor(settings, "set") : textFor(settings, "empty")}`)
       .join(", ");
     const overrideCount = [...preprocessingSelects.values()].filter((select) => select.value !== "skip").length;
     current.textContent =
-      `Current: ${hostInput.value.trim() || "127.0.0.1"}:${portInput.value || "7243"}, ` +
-      `desktop settings ${formatOnOff(useSettingsToggle.checked)}, ` +
-      `${promptState}, preprocessing overrides ${overrideCount}`;
+      `${textFor(settings, "current")}: ${hostInput.value.trim() || "127.0.0.1"}:${portInput.value || "7243"}, ` +
+      `${textFor(settings, "desktopSettings")} ${formatOnOff(useSettingsToggle.checked)}, ` +
+      `${promptState}, ${textFor(settings, "preprocessingOverrides")} ${overrideCount}`;
   };
   refreshCurrent();
 
@@ -502,19 +657,32 @@ function naiaSettingsEditor(settings = {}) {
     refreshCurrent();
     scheduleSettingSave("naia.host", hostInput.value.trim() || "127.0.0.1", status);
   });
+  hostInput.addEventListener("change", () => {
+    refreshCurrent();
+    saveSettingAndNotify("naia.host", hostInput.value.trim() || "127.0.0.1", status).catch(() => {});
+  });
   portInput.addEventListener("input", () => {
     sanitizePort();
     refreshCurrent();
     scheduleSettingSave("naia.port", portInput.value, status);
   });
+  portInput.addEventListener("change", () => {
+    sanitizePort();
+    refreshCurrent();
+    saveSettingAndNotify("naia.port", portInput.value, status).catch(() => {});
+  });
   useSettingsToggle.addEventListener("change", () => {
     refreshCurrent();
     saveSettingAndNotify("naia.use_naia_settings", useSettingsToggle.checked ? "true" : "false", status).catch(() => {});
   });
-  for (const [key, textarea] of textareas.entries()) {
-    textarea.addEventListener("input", () => {
+  for (const [key, input] of promptInputs.entries()) {
+    input.addEventListener("input", () => {
       refreshCurrent();
-      scheduleSettingSave(`naia.${key}`, textarea.value, status);
+      scheduleSettingSave(`naia.${key}`, input.value, status);
+    });
+    input.addEventListener("change", () => {
+      refreshCurrent();
+      saveSettingAndNotify(`naia.${key}`, input.value, status).catch(() => {});
     });
   }
   for (const [key, select] of preprocessingSelects.entries()) {
@@ -694,20 +862,28 @@ app.registerExtension({
   async setup() {
     const settings = await getSettings();
     window.__easyuseAnimaSettings = { ...settings };
+    const latestSettings = () => currentSettings(settings);
+
+    app.ui.settings.addSetting({
+      id: "EasyUseAnima.UI.Language",
+      name: "EasyUse Anima: Settings Language",
+      type: () => languageEditor(latestSettings()),
+      tooltip: "Choose English or Korean labels inside EasyUse Anima settings panels.",
+    });
 
     app.ui.settings.addSetting({
       id: "EasyUseAnima.Section.Prompt",
       name: "EasyUse Anima: Prompt",
       type: () => sectionHeader(
-        "Prompt metadata",
-        "Controls that affect generated prompt text or metadata-only output.",
+        textFor(latestSettings(), "promptMetadataTitle"),
+        textFor(latestSettings(), "promptMetadataGuide"),
       ),
     });
 
     app.ui.settings.addSetting({
       id: "EasyUseAnima.Prompt.MetadataFilter",
       name: "EasyUse Anima: Metadata Prompt Filter",
-      type: () => metadataFilterEditor(settings["prompt.metadata_filter_words"] || ""),
+      type: () => metadataFilterEditor(latestSettings()["prompt.metadata_filter_words"] || ""),
       tooltip: "Remove these tags only from Anima Prompt Builder metadata_prompt.",
     });
 
@@ -715,8 +891,8 @@ app.registerExtension({
       id: "EasyUseAnima.Prompt.AutocompleteCsv",
       name: "EasyUse Anima: Autocomplete CSV",
       type: () => autocompleteDatasetSelector({
-        source: settings["autocomplete.source"] || "",
-        limit: settings["autocomplete.limit"] || 20,
+        source: latestSettings()["autocomplete.source"] || "",
+        limit: latestSettings()["autocomplete.limit"] || 20,
       }),
       tooltip: "Select which bundled Korean Danbooru CSV powers autocomplete and tag highlighting.",
     });
@@ -724,7 +900,7 @@ app.registerExtension({
     app.ui.settings.addSetting({
       id: "EasyUseAnima.Prompt.PromptStudio",
       name: "EasyUse Anima: Prompt Studio Highlighting",
-      type: () => promptStudioEditor(settings),
+      type: () => promptStudioEditor(latestSettings()),
       tooltip: "Configure Prompt Studio typo indicators and tag highlight colors.",
     });
 
@@ -732,15 +908,15 @@ app.registerExtension({
       id: "EasyUseAnima.Section.LoraPreset",
       name: "EasyUse Anima: LoRA Preset",
       type: () => sectionHeader(
-        "LoRA preset",
-        "Display options for Anima LoRA Preset.",
+        textFor(latestSettings(), "loraPresetTitle"),
+        textFor(latestSettings(), "loraPresetGuide"),
       ),
     });
 
     app.ui.settings.addSetting({
       id: "EasyUseAnima.LoraPreset.Display",
       name: "EasyUse Anima: LoRA Preset Display",
-      type: () => loraPresetEditor(settings),
+      type: () => loraPresetEditor(latestSettings()),
       tooltip: "Choose whether LoRA preset rows show only filenames or full relative paths.",
     });
 
@@ -748,15 +924,15 @@ app.registerExtension({
       id: "EasyUseAnima.Section.NAIA",
       name: "EasyUse Anima: NAIA",
       type: () => sectionHeader(
-        "NAIA bridge",
-        "Connection and Prompt Engineering override settings used by Anima NAIA Random Prompt.",
+        textFor(latestSettings(), "naiaBridgeTitle"),
+        textFor(latestSettings(), "naiaBridgeGuide"),
       ),
     });
 
     app.ui.settings.addSetting({
       id: "EasyUseAnima.NAIA.Settings",
       name: "EasyUse Anima: NAIA Settings",
-      type: () => naiaSettingsEditor(settings),
+      type: () => naiaSettingsEditor(latestSettings()),
       tooltip: "Configure NAIA host, port, Prompt Engineering override, and preprocessing options.",
     });
 
