@@ -27,6 +27,17 @@ def load_api_module():
 
 
 class LoraProfileStorageTests(unittest.TestCase):
+    def test_api_import_tolerates_prompt_server_without_instance(self):
+        fake_server = types.ModuleType("server")
+        fake_server.PromptServer = type("PromptServer", (), {})
+        fake_aiohttp = types.ModuleType("aiohttp")
+        fake_aiohttp.web = types.SimpleNamespace()
+
+        with patch.dict(sys.modules, {"server": fake_server, "aiohttp": fake_aiohttp}):
+            api = load_api_module()
+
+        self.assertIsNone(api.routes)
+
     def test_save_and_load_lora_profile_set(self):
         api = load_api_module()
         with tempfile.TemporaryDirectory() as tmp:

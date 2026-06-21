@@ -169,13 +169,23 @@ def _resolve_lora_preview_path(lora_name: str):
     return None
 
 
-if server is not None and web is not None:
+def _get_prompt_routes():
+    if server is None:
+        return None
+    prompt_server = getattr(getattr(server, "PromptServer", None), "instance", None)
+    return getattr(prompt_server, "routes", None)
 
-    @server.PromptServer.instance.routes.get("/easyuse_anima/settings")
+
+routes = _get_prompt_routes()
+
+
+if web is not None and routes is not None:
+
+    @routes.get("/easyuse_anima/settings")
     async def get_settings_handler(request):
         return web.json_response(public_settings())
 
-    @server.PromptServer.instance.routes.post("/easyuse_anima/set_setting")
+    @routes.post("/easyuse_anima/set_setting")
     async def set_setting_handler(request):
         data = await request.json()
         key = data.get("key")
@@ -193,7 +203,7 @@ if server is not None and web is not None:
             )
         return web.json_response({"status": "ok", **public_settings()})
 
-    @server.PromptServer.instance.routes.get("/easyuse_anima/autocomplete_status")
+    @routes.get("/easyuse_anima/autocomplete_status")
     async def autocomplete_status_handler(request):
         selected_source = resolve_autocomplete_source()
         source_key, path = resolve_autocomplete_source_path(selected_source)
@@ -205,7 +215,7 @@ if server is not None and web is not None:
             }
         )
 
-    @server.PromptServer.instance.routes.get("/easyuse_anima/autocomplete")
+    @routes.get("/easyuse_anima/autocomplete")
     async def autocomplete_handler(request):
         query = request.query.get("q", "")
         category = request.query.get("category", "")
@@ -227,7 +237,7 @@ if server is not None and web is not None:
             )
         )
 
-    @server.PromptServer.instance.routes.post("/easyuse_anima/classify_prompt")
+    @routes.post("/easyuse_anima/classify_prompt")
     async def classify_prompt_handler(request):
         data = await request.json()
         try:
@@ -239,7 +249,7 @@ if server is not None and web is not None:
             classify_prompt_text(str(data.get("text") or ""), limit=limit, path=path)
         )
 
-    @server.PromptServer.instance.routes.get("/easyuse_anima/lora_preview")
+    @routes.get("/easyuse_anima/lora_preview")
     async def lora_preview_handler(request):
         preview_path = _resolve_lora_preview_path(request.query.get("name", ""))
         if not preview_path:
@@ -249,11 +259,11 @@ if server is not None and web is not None:
             headers={"Content-Disposition": f'filename="{os.path.basename(preview_path)}"'},
         )
 
-    @server.PromptServer.instance.routes.get("/easyuse_anima/lora_profiles")
+    @routes.get("/easyuse_anima/lora_profiles")
     async def lora_profiles_handler(request):
         return web.json_response({"profiles": _list_lora_profiles()})
 
-    @server.PromptServer.instance.routes.post("/easyuse_anima/lora_profiles/save")
+    @routes.post("/easyuse_anima/lora_profiles/save")
     async def save_lora_profile_handler(request):
         data = await request.json()
         try:
@@ -262,7 +272,7 @@ if server is not None and web is not None:
             return web.json_response({"status": "error", "message": str(exc)}, status=400)
         return web.json_response({"status": "ok", "profile": payload})
 
-    @server.PromptServer.instance.routes.get("/easyuse_anima/lora_profiles/load")
+    @routes.get("/easyuse_anima/lora_profiles/load")
     async def load_lora_profile_handler(request):
         try:
             payload = _load_lora_profile(request.query.get("name", ""))
