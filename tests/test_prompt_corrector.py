@@ -84,7 +84,7 @@ class PromptCorrectorTests(unittest.TestCase):
 
         self.assertEqual(
             corrected,
-            "score 7:, very aesthetic, lowres, source anime, year 2024, rating safe, 1girl",
+            "score_7:, very aesthetic, lowres, source anime, year 2024, rating safe, 1girl",
         )
         data = json.loads(report)
         self.assertEqual(
@@ -92,6 +92,46 @@ class PromptCorrectorTests(unittest.TestCase):
             ["quality", "quality", "meta", "meta", "year", "safety", "count"],
         )
         self.assertEqual(data["unknown_tags"], [])
+
+    def test_preserves_pony_score_underscores_in_positive_and_negative_outputs(self):
+        corrected, _report = EasyUseAnimaPromptCorrector().correct(
+            "1girl, score_8, score_7:, score 6",
+            "",
+            "",
+        )
+
+        self.assertEqual(corrected, "score_8, score_7:, score_6, 1girl")
+
+        fields = [
+            {
+                "id": "positive_quality",
+                "pane": "positive",
+                "type": "quality",
+                "label": "Quality Tags",
+                "text": "score_8, score 7",
+                "height": 72,
+            },
+            {
+                "id": "negative_quality",
+                "pane": "negative",
+                "type": "quality",
+                "label": "Quality Tags",
+                "text": "score_5, score 4",
+                "height": 72,
+            },
+        ]
+        result = EasyUseAnimaPromptStudioAdvanced().build(
+            False,
+            True,
+            False,
+            False,
+            json.dumps(fields),
+        )
+
+        positive, negative, _quality, _use_amg, _metadata, metadata_negative, _width, _height = result["result"]
+        self.assertEqual(positive, "score_8, score_7")
+        self.assertEqual(negative, "score_5, score_4")
+        self.assertEqual(metadata_negative, "score_5, score_4")
 
 
 class PromptBuilderTests(unittest.TestCase):
