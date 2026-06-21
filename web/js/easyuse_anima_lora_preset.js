@@ -825,12 +825,6 @@ function hideInternalWidget(node, name) {
   }
   node.__easyuseAnimaHiddenWidgets ||= {};
   node.__easyuseAnimaHiddenWidgets[name] = widget;
-  if (Array.isArray(node.widgets)) {
-    const index = node.widgets.indexOf(widget);
-    if (index >= 0) {
-      node.widgets.splice(index, 1);
-    }
-  }
   node.setDirtyCanvas?.(true, true);
 }
 
