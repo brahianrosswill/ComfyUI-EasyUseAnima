@@ -2972,14 +2972,12 @@ function advancedEditorWidget(node) {
 }
 
 function advancedNodeChromeOffset(node, editorHeight = measureAdvancedEditorContentHeight(node?.__easyuseAnimaAdvancedEditorEl)) {
-  const computedHeight = Number(advancedBaseComputeSize(node)?.[1]) || 0;
-  const computedOffset = computedHeight - (Number(editorHeight) || 0);
   const widget = advancedEditorWidget(node);
   const widgetY = Math.max(
     Number(widget?.last_y) || 0,
     Number(widget?.y) || 0,
   );
-  return Math.ceil(Math.max(72, computedOffset, widgetY + 12));
+  return Math.ceil(Math.max(72, widgetY + 12));
 }
 
 function advancedMinimumNodeHeight(node) {
@@ -2989,11 +2987,9 @@ function advancedMinimumNodeHeight(node) {
   }
   const editorHeight = measureAdvancedEditorContentHeight(editor);
   const chromeOffset = advancedNodeChromeOffset(node, editorHeight);
-  const computed = advancedBaseComputeSize(node);
   return Math.ceil(Math.max(
     220,
     advancedEditorMinimumHeight(node) + chromeOffset,
-    Number(computed?.[1]) || 0,
   ));
 }
 
@@ -3039,107 +3035,6 @@ function setAdvancedTextareaHeight(node, textarea, height, options = {}) {
   if (options.refreshHighlight !== false) {
     updateAdvancedFieldHighlight(node, field, textarea);
   }
-}
-
-function distributeAdvancedHeights(items, targetTotal) {
-  const total = items.reduce((sum, item) => sum + item.height, 0);
-  let delta = Math.round(Number(targetTotal) - total);
-  if (Math.abs(delta) <= 1 || !items.length) {
-    return total;
-  }
-
-  if (delta > 0) {
-    const weightTotal = items.reduce((sum, item) => sum + Math.max(1, item.height), 0) || items.length;
-    let remaining = delta;
-    items.forEach((item, index) => {
-      const share = index === items.length - 1
-        ? remaining
-        : Math.round(delta * Math.max(1, item.height) / weightTotal);
-      item.height += share;
-      remaining -= share;
-    });
-    return items.reduce((sum, item) => sum + item.height, 0);
-  }
-
-  let shrink = -delta;
-  let candidates = items.filter((item) => item.height > item.min + 1);
-  while (shrink > 1 && candidates.length) {
-    const reducibleTotal = candidates.reduce((sum, item) => sum + Math.max(0, item.height - item.min), 0);
-    if (reducibleTotal <= 0) {
-      break;
-    }
-    let used = 0;
-    const passShrink = shrink;
-    candidates.forEach((item, index) => {
-      const reducible = Math.max(0, item.height - item.min);
-      const share = index === candidates.length - 1
-        ? passShrink - used
-        : Math.round(passShrink * reducible / reducibleTotal);
-      const amount = Math.min(reducible, Math.max(0, share));
-      item.height -= amount;
-      used += amount;
-    });
-    if (used <= 0) {
-      break;
-    }
-    shrink -= used;
-    candidates = candidates.filter((item) => item.height > item.min + 1);
-  }
-  return items.reduce((sum, item) => sum + item.height, 0);
-}
-
-function balanceAdvancedTextareaHeights(node, targetEditorHeight, {
-  allowShrink = true,
-  syncFields = true,
-  refreshHighlights = true,
-} = {}) {
-  const editor = node?.__easyuseAnimaAdvancedEditorEl;
-  if (!editor) {
-    return false;
-  }
-  const textareas = [...editor.querySelectorAll("textarea[data-easyuse-anima-advanced-field-id]")];
-  if (!textareas.length) {
-    return false;
-  }
-  const fixedHeight = advancedEditorFixedHeight(editor, textareas);
-  const targetTextareaTotal = Math.max(0, Math.round(Number(targetEditorHeight) || 0) - fixedHeight);
-  const items = textareas.map((textarea) => ({
-    textarea,
-    min: advancedTextareaMinimumHeight(textarea),
-    height: advancedTextareaCurrentHeight(textarea),
-  }));
-  const currentTotal = items.reduce((sum, item) => sum + item.height, 0);
-  if (!allowShrink && targetTextareaTotal < currentTotal) {
-    return false;
-  }
-  const nextTotal = distributeAdvancedHeights(items, targetTextareaTotal);
-  if (Math.abs(nextTotal - currentTotal) <= 1) {
-    return false;
-  }
-  for (const item of items) {
-    setAdvancedTextareaHeight(node, item.textarea, item.height, {
-      syncField: syncFields,
-      refreshHighlight: refreshHighlights,
-    });
-  }
-  if (syncFields) {
-    writeAdvancedFields(node, node.__easyuseAnimaAdvancedFields || parseAdvancedFields(node));
-  }
-  return true;
-}
-
-function scheduleAdvancedResizeStateSync(node) {
-  if (!node) {
-    return;
-  }
-  clearTimeout(node.__easyuseAnimaAdvancedResizeSyncTimer);
-  node.__easyuseAnimaAdvancedResizeSyncTimer = setTimeout(() => {
-    node.__easyuseAnimaAdvancedResizeSyncTimer = null;
-    const fields = collectAdvancedEditorFields(node);
-    writeAdvancedFields(node, fields);
-    scheduleAdvancedHighlights(node, { classify: false });
-    app.graph?.setDirtyCanvas?.(true, true);
-  }, 160);
 }
 
 function clearAdvancedResizeEndListeners(node) {
@@ -3199,21 +3094,6 @@ function updateAdvancedEditorWidth(node) {
   editor.classList.toggle("is-narrow", width < 620);
 }
 
-function advancedBaseComputeSize(node) {
-  if (!node || typeof node.computeSize !== "function") {
-    return [Number(node?.size?.[0]) || 360, 0];
-  }
-  try {
-    const size = node.computeSize();
-    return [
-      Number(size?.[0]) || Number(node?.size?.[0]) || 360,
-      Number(size?.[1]) || 0,
-    ];
-  } catch {
-    return [Number(node?.size?.[0]) || 360, 0];
-  }
-}
-
 function applyAdvancedLayout(node, reason = "layout") {
   const editor = node?.__easyuseAnimaAdvancedEditorEl;
   if (!editor || !node.size) {
@@ -3229,36 +3109,18 @@ function applyAdvancedLayout(node, reason = "layout") {
 
     const currentWidth = Number(node.size[0]) || 360;
     const currentHeight = Number(node.size[1]) || 0;
-    const initialEditorHeight = measureAdvancedEditorContentHeight(editor);
-    const chromeOffset = advancedNodeChromeOffset(node, initialEditorHeight);
-    const minEditorHeight = Math.max(0, currentHeight - chromeOffset);
-    let resizedFields = false;
-    if (reason === "resize") {
-      resizedFields = balanceAdvancedTextareaHeights(node, minEditorHeight, {
-        allowShrink: true,
-        syncFields: false,
-        refreshHighlights: false,
-      });
-    } else if (currentHeight > initialEditorHeight + chromeOffset + 2) {
-      resizedFields = balanceAdvancedTextareaHeights(node, minEditorHeight, { allowShrink: false });
-    }
-    if (resizedFields && reason === "resize") {
-      scheduleAdvancedResizeStateSync(node);
-    }
     const editorHeight = measureAdvancedEditorContentHeight(editor);
-    const afterComputed = advancedBaseComputeSize(node);
     const minEditorContentHeight = advancedEditorMinimumHeight(node);
-    const minimumHeight = Math.max(
+    const chromeOffset = advancedNodeChromeOffset(node, editorHeight);
+    const nextHeight = Math.ceil(Math.max(
       220,
       Math.ceil(editorHeight + chromeOffset),
       Math.ceil(minEditorContentHeight + chromeOffset),
-      Math.ceil(Number(afterComputed?.[1]) || 0),
-    );
-    const nextHeight = Math.max(currentHeight, minimumHeight);
+    ));
     node.__easyuseAnimaAdvancedLastEditorHeight = editorHeight;
     node.__easyuseAnimaAdvancedLastLayoutReason = reason;
 
-    if (typeof node.setSize === "function" && nextHeight > currentHeight + 1) {
+    if (typeof node.setSize === "function" && Math.abs(nextHeight - currentHeight) > 1) {
       node.setSize([currentWidth, nextHeight]);
     }
 
