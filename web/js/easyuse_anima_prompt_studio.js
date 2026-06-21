@@ -2287,6 +2287,7 @@ function normalizeAdvancedField(field, index = 0) {
     label,
     text: String(field?.text || ""),
     height: Math.max(42, Math.round(Number(field?.height) || 72)),
+    heightMode: field?.heightMode === "manual" ? "manual" : "auto",
     enabled: field?.enabled !== false,
     pin: type === "trigger" ? field?.pin !== false : false,
   };
@@ -2971,14 +2972,23 @@ function advancedEditorLayoutHeight(node) {
   }
   return Math.ceil(Math.max(
     220,
+    measureAdvancedEditorHeight(editor),
     measureAdvancedEditorContentHeight(editor),
     advancedEditorMinimumHeight(node),
   ));
 }
 
+function advancedAvailableEditorViewportHeight(node) {
+  const contentHeight = advancedEditorLayoutHeight(node);
+  const nodeHeight = Number(node?.size?.[1]) || 0;
+  const chromeOffset = advancedNodeChromeOffset(node, contentHeight);
+  const availableHeight = Math.max(0, nodeHeight - chromeOffset);
+  return Math.ceil(Math.max(contentHeight, availableHeight));
+}
+
 function advancedEditorWidgetHeight(node) {
   if (node?.__easyuseAnimaAdvancedEditorEl?.isConnected) {
-    return advancedEditorLayoutHeight(node);
+    return advancedAvailableEditorViewportHeight(node);
   }
   return Math.ceil(Math.max(
     advancedEditorMinimumHeight(node),
@@ -3006,11 +3016,11 @@ function advancedMinimumNodeHeight(node) {
   if (!editor) {
     return 220;
   }
-  const editorHeight = measureAdvancedEditorContentHeight(editor);
-  const chromeOffset = advancedNodeChromeOffset(node, editorHeight);
+  const contentMinimum = advancedEditorMinimumHeight(node);
+  const chromeOffset = advancedNodeChromeOffset(node, contentMinimum);
   return Math.ceil(Math.max(
     220,
-    advancedEditorMinimumHeight(node) + chromeOffset,
+    contentMinimum + chromeOffset,
   ));
 }
 
@@ -3138,20 +3148,14 @@ function applyAdvancedLayout(node, reason = "layout") {
 
     const currentWidth = Number(node.size[0]) || 360;
     const currentHeight = Number(node.size[1]) || 0;
-    const editorHeight = advancedEditorLayoutHeight(node);
-    node.__easyuseAnimaAdvancedWidgetHeight = editorHeight;
-    const chromeOffset = advancedNodeChromeOffset(node, editorHeight);
-    const requiredHeight = Math.ceil(editorHeight + chromeOffset);
-    const nextHeight = Math.ceil(Math.max(
-      220,
-      requiredHeight,
-      currentHeight,
-    ));
-    node.__easyuseAnimaAdvancedLastEditorHeight = editorHeight;
+    const minimumHeight = advancedMinimumNodeHeight(node);
+    const widgetHeight = advancedEditorWidgetHeight(node);
+    node.__easyuseAnimaAdvancedWidgetHeight = widgetHeight;
+    node.__easyuseAnimaAdvancedLastEditorHeight = widgetHeight;
     node.__easyuseAnimaAdvancedLastLayoutReason = reason;
 
-    if (typeof node.setSize === "function" && nextHeight > currentHeight + 1) {
-      node.setSize([currentWidth, nextHeight]);
+    if (typeof node.setSize === "function" && currentHeight < minimumHeight - 1) {
+      node.setSize([currentWidth, minimumHeight]);
     }
 
     app.graph?.setDirtyCanvas?.(true, true);
@@ -3368,16 +3372,7 @@ function shouldKeepAdvancedWheelEvent(event) {
   if (!(target instanceof Element)) {
     return false;
   }
-  const control = target.closest("textarea, input, select");
-  if (!control) {
-    return false;
-  }
-  if (control instanceof HTMLTextAreaElement) {
-    const style = getComputedStyle(control);
-    const canScroll = style.overflowY !== "hidden" && control.scrollHeight > control.clientHeight + 2;
-    return canScroll;
-  }
-  return true;
+  return !!target.closest("textarea, input, select");
 }
 
 function forwardAdvancedWheelToCanvas(event) {
@@ -3534,35 +3529,46 @@ function createAdvancedFieldElement(node, field) {
   const updateFieldHighlight = debounce(() => {
     scheduleAdvancedFieldHighlight(node, field, textarea);
   }, 180);
-  const syncHeight = (options = {}) => {
-    if (options.preserveUserHeight) {
-      const height = Math.max(
-        advancedTextareaMinimumHeight(textarea),
-        Math.ceil(Number(textarea.offsetHeight) || 0),
-        Math.ceil(Number.parseFloat(textarea.style.height || "") || 0),
-      );
-      setAdvancedTextareaHeight(node, textarea, height);
-      field.height = height;
-      writeAdvancedFields(node, fields, { syncInputs: false });
-      updateAdvancedFieldHighlight(node, field, textarea);
-      updateFieldHighlight();
-      scheduleAdvancedLayout(node, "textarea");
+  const persistTextareaHeight = (height, mode = field.heightMode || "auto") => {
+    setAdvancedTextareaHeight(node, textarea, height);
+    field.height = Math.max(advancedTextareaMinimumHeight(textarea), Math.round(Number(height) || 0));
+    field.heightMode = mode === "manual" ? "manual" : "auto";
+    writeAdvancedFields(node, fields, { syncInputs: false });
+    updateAdvancedFieldHighlight(node, field, textarea);
+    updateFieldHighlight();
+    scheduleAdvancedLayout(node, "textarea");
+  };
+  const syncHeight = () => {
+    if (field.heightMode === "manual") {
+      persistTextareaHeight(advancedTextareaCurrentHeight(textarea), "manual");
       return;
     }
-
     textarea.style.height = "auto";
     textarea.style.overflowY = "hidden";
     const height = Math.max(
       advancedTextareaMinimumHeight(textarea),
       advancedTextareaContentHeight(textarea),
     );
-    setAdvancedTextareaHeight(node, textarea, height);
-    field.height = height;
-    writeAdvancedFields(node, fields, { syncInputs: false });
-    updateAdvancedFieldHighlight(node, field, textarea);
-    updateFieldHighlight();
-    scheduleAdvancedLayout(node, "textarea");
+    field.heightMode = "auto";
+    persistTextareaHeight(height, "auto");
   };
+  const rememberTextareaResizeStart = () => {
+    textarea.__easyuseAnimaAdvancedResizeStartHeight = advancedTextareaCurrentHeight(textarea);
+  };
+  const captureTextareaManualResize = () => {
+    const startHeight = Number(textarea.__easyuseAnimaAdvancedResizeStartHeight || 0);
+    const currentHeight = advancedTextareaCurrentHeight(textarea);
+    textarea.__easyuseAnimaAdvancedResizeStartHeight = currentHeight;
+    if (Math.abs(currentHeight - startHeight) <= 2) {
+      updateAdvancedFieldHighlight(node, field, textarea);
+      return;
+    }
+    persistTextareaHeight(currentHeight, "manual");
+  };
+  textarea.addEventListener("mousedown", rememberTextareaResizeStart);
+  textarea.addEventListener("pointerdown", rememberTextareaResizeStart);
+  textarea.addEventListener("mouseup", captureTextareaManualResize);
+  textarea.addEventListener("pointerup", captureTextareaManualResize);
   textarea.addEventListener("input", () => {
     if (linked) {
       node.__easyuseAnimaAdvancedFieldInputValues ||= {};
@@ -3574,8 +3580,6 @@ function createAdvancedFieldElement(node, field) {
     syncHeight();
   });
   textarea.addEventListener("scroll", () => updateAdvancedFieldHighlight(node, field, textarea));
-  textarea.addEventListener("mouseup", () => syncHeight({ preserveUserHeight: true }));
-  textarea.addEventListener("pointerup", () => syncHeight({ preserveUserHeight: true }));
   textarea.addEventListener("change", () => {
     updateAdvancedFieldHighlight(node, field, textarea);
     updateFieldHighlight();
@@ -3701,7 +3705,7 @@ function hookAdvancedNode(node) {
   node.serialize_widgets = true;
   node.minWidth = Math.max(Number(node.minWidth) || 0, 360);
   if (Array.isArray(node.size)) {
-    node.size[0] = Math.max(Number(node.size[0]) || 420, 420);
+    node.size[0] = Math.max(Number(node.size[0]) || 420, 360);
   }
   if (!node.__easyuseAnimaAdvancedEditorEl) {
     const editor = document.createElement("div");
@@ -3742,7 +3746,7 @@ function scheduleHookAdvancedNode(node) {
 
 function syncAdvancedValues(node, serialized = null) {
   const fields = collectAdvancedEditorFields(node);
-  writeAdvancedFields(node, fields);
+  writeAdvancedFields(node, fields, { syncInputs: false });
   if (!serialized || !Array.isArray(node.widgets) || !Array.isArray(serialized.widgets_values)) {
     return;
   }
@@ -3779,7 +3783,7 @@ function applyAdvancedExecutedInputs(node, message) {
   }
   const fields = parseAdvancedFields(node);
   if (mergeAdvancedFieldInputValues(node, fields, node.__easyuseAnimaAdvancedFieldInputValues)) {
-    writeAdvancedFields(node, fields);
+    writeAdvancedFields(node, fields, { syncInputs: false });
   } else {
     node.__easyuseAnimaAdvancedFields = fields;
   }
@@ -3894,7 +3898,6 @@ app.registerExtension({
       try {
         if (nodeData.name === ADVANCED_NODE_TYPE) {
           updateAdvancedEditorWidth(this);
-          clampAdvancedNodeToMinimumHeight(this);
           scheduleAdvancedResizeFinalize(this);
           return result;
         }
