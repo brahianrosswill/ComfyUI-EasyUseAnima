@@ -2343,7 +2343,7 @@ function collectAdvancedEditorFields(node) {
     field.text = textarea.value;
     const height = Number.parseInt(textarea.style.height || "", 10);
     if (Number.isFinite(height) && height > 0) {
-      field.height = Math.max(field.height || 42, height);
+      field.height = Math.max(42, height);
     }
   });
   return fields;
@@ -2867,6 +2867,123 @@ function measureAdvancedEditorHeight(editor) {
   ));
 }
 
+function advancedTextareaMinimumHeight(textarea) {
+  const style = textarea instanceof HTMLElement ? getComputedStyle(textarea) : null;
+  return Math.max(
+    42,
+    Math.ceil(Number.parseFloat(style?.minHeight || "") || 0),
+  );
+}
+
+function advancedTextareaCurrentHeight(textarea) {
+  return Math.max(
+    advancedTextareaMinimumHeight(textarea),
+    Math.ceil(Number.parseFloat(textarea?.style?.height || "") || 0),
+    Math.ceil(Number(textarea?.offsetHeight) || 0),
+    Math.ceil(Number(textarea?.clientHeight) || 0),
+  );
+}
+
+function advancedFieldByTextarea(node, textarea) {
+  const id = String(textarea?.dataset?.easyuseAnimaAdvancedFieldId || "");
+  if (!id) {
+    return null;
+  }
+  return (node.__easyuseAnimaAdvancedFields || parseAdvancedFields(node))
+    .find((field) => field.id === id) || null;
+}
+
+function setAdvancedTextareaHeight(node, textarea, height) {
+  const nextHeight = Math.max(advancedTextareaMinimumHeight(textarea), Math.round(Number(height) || 0));
+  textarea.style.height = `${nextHeight}px`;
+  textarea.style.overflowY = (Number(textarea.scrollHeight) || 0) > nextHeight + 2 ? "auto" : "hidden";
+  const field = advancedFieldByTextarea(node, textarea);
+  if (field) {
+    field.height = nextHeight;
+  }
+  updateAdvancedFieldHighlight(node, field, textarea);
+}
+
+function distributeAdvancedHeights(items, targetTotal) {
+  const total = items.reduce((sum, item) => sum + item.height, 0);
+  let delta = Math.round(Number(targetTotal) - total);
+  if (Math.abs(delta) <= 1 || !items.length) {
+    return total;
+  }
+
+  if (delta > 0) {
+    const weightTotal = items.reduce((sum, item) => sum + Math.max(1, item.height), 0) || items.length;
+    let remaining = delta;
+    items.forEach((item, index) => {
+      const share = index === items.length - 1
+        ? remaining
+        : Math.round(delta * Math.max(1, item.height) / weightTotal);
+      item.height += share;
+      remaining -= share;
+    });
+    return items.reduce((sum, item) => sum + item.height, 0);
+  }
+
+  let shrink = -delta;
+  let candidates = items.filter((item) => item.height > item.min + 1);
+  while (shrink > 1 && candidates.length) {
+    const reducibleTotal = candidates.reduce((sum, item) => sum + Math.max(0, item.height - item.min), 0);
+    if (reducibleTotal <= 0) {
+      break;
+    }
+    let used = 0;
+    const passShrink = shrink;
+    candidates.forEach((item, index) => {
+      const reducible = Math.max(0, item.height - item.min);
+      const share = index === candidates.length - 1
+        ? passShrink - used
+        : Math.round(passShrink * reducible / reducibleTotal);
+      const amount = Math.min(reducible, Math.max(0, share));
+      item.height -= amount;
+      used += amount;
+    });
+    if (used <= 0) {
+      break;
+    }
+    shrink -= used;
+    candidates = candidates.filter((item) => item.height > item.min + 1);
+  }
+  return items.reduce((sum, item) => sum + item.height, 0);
+}
+
+function balanceAdvancedTextareaHeights(node, targetEditorHeight, { allowShrink = true } = {}) {
+  const editor = node?.__easyuseAnimaAdvancedEditorEl;
+  if (!editor) {
+    return false;
+  }
+  const textareas = [...editor.querySelectorAll("textarea[data-easyuse-anima-advanced-field-id]")];
+  if (!textareas.length) {
+    return false;
+  }
+  const editorHeight = measureAdvancedEditorHeight(editor);
+  const textareaTotal = textareas.reduce((sum, textarea) => sum + advancedTextareaCurrentHeight(textarea), 0);
+  const fixedHeight = Math.max(0, editorHeight - textareaTotal);
+  const targetTextareaTotal = Math.max(0, Math.round(Number(targetEditorHeight) || 0) - fixedHeight);
+  const items = textareas.map((textarea) => ({
+    textarea,
+    min: advancedTextareaMinimumHeight(textarea),
+    height: advancedTextareaCurrentHeight(textarea),
+  }));
+  const currentTotal = items.reduce((sum, item) => sum + item.height, 0);
+  if (!allowShrink && targetTextareaTotal < currentTotal) {
+    return false;
+  }
+  const nextTotal = distributeAdvancedHeights(items, targetTextareaTotal);
+  if (Math.abs(nextTotal - currentTotal) <= 1) {
+    return false;
+  }
+  for (const item of items) {
+    setAdvancedTextareaHeight(node, item.textarea, item.height);
+  }
+  writeAdvancedFields(node, node.__easyuseAnimaAdvancedFields || parseAdvancedFields(node));
+  return true;
+}
+
 function updateAdvancedEditorWidth(node) {
   const editor = node?.__easyuseAnimaAdvancedEditorEl;
   if (!editor) {
@@ -2911,15 +3028,23 @@ function applyAdvancedLayout(node, reason = "layout") {
     const currentHeight = Number(node.size[1]) || 0;
     const computed = advancedBaseComputeSize(node);
     const computedHeight = Number(computed[1]) || 0;
-    const editorHeight = measureAdvancedEditorHeight(editor);
+    const initialEditorHeight = measureAdvancedEditorHeight(editor);
     const chromeOffset = Math.max(
       72,
-      Math.round(computedHeight - editorHeight),
+      Math.round(computedHeight - initialEditorHeight),
     );
+    const minEditorHeight = Math.max(0, currentHeight - chromeOffset);
+    if (reason === "resize") {
+      balanceAdvancedTextareaHeights(node, minEditorHeight, { allowShrink: true });
+    } else if (currentHeight > initialEditorHeight + chromeOffset + 2) {
+      balanceAdvancedTextareaHeights(node, minEditorHeight, { allowShrink: false });
+    }
+    const editorHeight = measureAdvancedEditorHeight(editor);
+    const afterComputed = advancedBaseComputeSize(node);
     const minimumHeight = Math.max(
       220,
       Math.ceil(editorHeight + chromeOffset),
-      Math.ceil(computedHeight),
+      Math.ceil(Number(afterComputed?.[1]) || 0),
     );
     const nextHeight = Math.max(currentHeight, minimumHeight);
     node.__easyuseAnimaAdvancedLastEditorHeight = editorHeight;
