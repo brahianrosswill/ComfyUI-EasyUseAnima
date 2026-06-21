@@ -3513,7 +3513,7 @@ function hookAdvancedNode(node) {
     node.addDOMWidget?.("easyuse_anima_advanced_editor", "EasyUseAnimaAdvancedEditor", editor, {
       serialize: false,
       hideOnZoom: false,
-      getMinHeight: () => Math.max(220, editor.scrollHeight || editor.offsetHeight || 220),
+      getMinHeight: () => 220,
     });
   }
   renderAdvancedEditor(node);
