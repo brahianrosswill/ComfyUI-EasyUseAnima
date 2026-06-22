@@ -42,7 +42,7 @@ def lookup_key(tag: str) -> str:
 
 
 def render_artist_tag(tag: str) -> str:
-    """Render an ANIMA artist tag with ``@`` and underscore-separated name."""
+    """Render an ANIMA artist tag with ``@`` and prompt-style spacing."""
 
     key = lookup_key(tag)
-    return "@" + key.replace(" ", "_")
+    return "@" + key

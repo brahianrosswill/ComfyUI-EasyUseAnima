@@ -67,13 +67,22 @@ class PromptCorrectorTests(unittest.TestCase):
         self.assertEqual(
             corrected,
             (
-                "1girl, (@akazawa_kureha:0.35), "
+                "1girl, (@akazawa kureha:0.35), "
                 "An intelligent and neat girl with long silver hair., "
                 "(A highly aesthetic Pixiv style illustration, clean composition.:0.6)"
             ),
         )
         data = json.loads(report)
         self.assertEqual(data["sections"][0], "count")
+
+    def test_prompt_correction_only_keeps_underscores_for_pony_scores(self):
+        corrected, _report = EasyUseAnimaPromptCorrector().correct(
+            "@artist_name, score 8, rating_safe, very_aesthetic",
+            "",
+            "",
+        )
+
+        self.assertEqual(corrected, "score_8, very aesthetic, rating safe, @artist name")
 
     def test_builtin_meta_quality_tags_are_known_without_external_data(self):
         corrected, report = EasyUseAnimaPromptCorrector().correct(

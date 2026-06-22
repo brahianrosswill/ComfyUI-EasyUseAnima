@@ -169,7 +169,7 @@ def inspect_prompt(
         key = lookup_key(normalized)
         info = kb.lookup(normalized)
         manual_known = key in override_keys
-        preserve_override_text = manual_known and not normalized.strip().startswith("@")
+        preserve_override_text = manual_known
         section = _classify_with_artist_options(
             normalized,
             info=info,
