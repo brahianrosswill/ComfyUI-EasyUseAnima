@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from .nodes import (
+    EasyUseAnimaDetailer,
     EasyUseAnimaLoraPreset,
     EasyUseAnimaNAIARandomPrompt,
     EasyUseAnimaPromptBuilder,
@@ -10,6 +11,7 @@ from .nodes import (
 from . import api  # noqa: F401 - registers ComfyUI HTTP routes
 
 NODE_CLASS_MAPPINGS = {
+    "EasyUseAnimaDetailer": EasyUseAnimaDetailer,
     "EasyUseAnimaLoraPreset": EasyUseAnimaLoraPreset,
     "EasyUseAnimaNAIARandomPrompt": EasyUseAnimaNAIARandomPrompt,
     "EasyUseAnimaPromptBuilder": EasyUseAnimaPromptBuilder,
@@ -19,6 +21,7 @@ NODE_CLASS_MAPPINGS = {
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
+    "EasyUseAnimaDetailer": "Anima Detailer",
     "EasyUseAnimaLoraPreset": "Anima LoRA Preset",
     "EasyUseAnimaNAIARandomPrompt": "Anima NAIA Random Prompt",
     "EasyUseAnimaPromptBuilder": "Anima Prompt Builder",

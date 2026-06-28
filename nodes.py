@@ -1,10 +1,13 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
+import importlib
+import inspect
 import json
 import logging
 import os
 import re
+import sys
 from math import gcd
 from typing import Any, Optional
 
@@ -254,6 +257,103 @@ def _clean_prompt(value: str) -> str:
 
 def _stable_change_key(payload: dict) -> str:
     return json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+
+
+def _comfy_max_resolution() -> int:
+    try:
+        import nodes as comfy_nodes  # type: ignore
+
+        return int(getattr(comfy_nodes, "MAX_RESOLUTION", 16384))
+    except Exception:
+        return 16384
+
+
+def _comfy_sampler_names() -> list[str]:
+    try:
+        import comfy.samplers  # type: ignore
+
+        return list(comfy.samplers.KSampler.SAMPLERS)
+    except Exception:
+        return [
+            "euler",
+            "euler_ancestral",
+            "heun",
+            "dpm_2",
+            "dpm_2_ancestral",
+            "dpmpp_2m",
+            "dpmpp_sde",
+            "ddim",
+        ]
+
+
+def _impact_core_module():
+    module = sys.modules.get("impact.core")
+    if module is not None:
+        return module
+    for module_name in ("impact.core", "modules.impact.core"):
+        try:
+            return importlib.import_module(module_name)
+        except Exception:
+            continue
+    return None
+
+
+def _impact_scheduler_names() -> list[str]:
+    core = _impact_core_module()
+    if core is not None:
+        try:
+            return list(core.get_schedulers())
+        except Exception:
+            pass
+    try:
+        import comfy.samplers  # type: ignore
+
+        return list(comfy.samplers.KSampler.SCHEDULERS)
+    except Exception:
+        return ["normal", "karras", "exponential", "sgm_uniform", "simple", "ddim_uniform"]
+
+
+def _find_impact_detailer_class():
+    try:
+        import nodes as comfy_nodes  # type: ignore
+
+        cls = getattr(comfy_nodes, "NODE_CLASS_MAPPINGS", {}).get("DetailerForEach")
+        if cls is not None:
+            return cls
+    except Exception:
+        pass
+
+    for module in list(sys.modules.values()):
+        mappings = getattr(module, "NODE_CLASS_MAPPINGS", None)
+        if isinstance(mappings, dict):
+            cls = mappings.get("DetailerForEach")
+            if cls is not None:
+                return cls
+
+    for module_name in ("impact.impact_pack", "modules.impact.impact_pack"):
+        try:
+            module = importlib.import_module(module_name)
+        except Exception:
+            continue
+        cls = getattr(module, "DetailerForEach", None)
+        if cls is not None:
+            return cls
+
+    raise RuntimeError(
+        "[EasyUseAnima] Anima Detailer requires ComfyUI Impact Pack's DetailerForEach. "
+        "Install/enable ComfyUI-Impact-Pack, then restart ComfyUI."
+    )
+
+
+def _call_impact_detailer(detailer, **kwargs):
+    method = getattr(detailer, "doit", None)
+    if method is None:
+        raise RuntimeError("[EasyUseAnima] Impact DetailerForEach does not expose a doit method.")
+    signature = inspect.signature(method)
+    parameters = signature.parameters
+    accepts_kwargs = any(param.kind == inspect.Parameter.VAR_KEYWORD for param in parameters.values())
+    call_kwargs = kwargs if accepts_kwargs else {key: value for key, value in kwargs.items() if key in parameters}
+    return method(**call_kwargs)
 
 
 def _split_tag_text(value: str) -> list[str]:
@@ -1987,6 +2087,246 @@ class EasyUseAnimaLoraPreset:
                 selected_index,
             ),
         }
+
+
+class EasyUseAnimaDetailer:
+    """Impact-compatible ANIMA detailer entry point."""
+
+    DESCRIPTION = (
+        "Runs an Impact Pack compatible SEGS detailer from EasyUse Anima. "
+        "This initial backend delegates to Impact Pack DetailerForEach while keeping "
+        "EasyUse Anima import safe when Impact Pack is unavailable."
+    )
+    OUTPUT_TOOLTIPS = (
+        "Enhanced image returned by Impact Pack DetailerForEach.",
+    )
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        max_resolution = _comfy_max_resolution()
+        return {
+            "required": {
+                "image": ("IMAGE",),
+                "segs": ("SEGS",),
+                "model": ("MODEL", {
+                    "tooltip": "Model passed through to Impact Pack DetailerForEach.",
+                }),
+                "clip": ("CLIP",),
+                "vae": ("VAE",),
+                "guide_size": ("FLOAT", {
+                    "default": 512,
+                    "min": 64,
+                    "max": max_resolution,
+                    "step": 8,
+                    "tooltip": "Target guide size for the detailed crop.",
+                }),
+                "guide_size_for": ("BOOLEAN", {
+                    "default": True,
+                    "label_on": "bbox",
+                    "label_off": "crop_region",
+                    "tooltip": "Use the bbox or crop region as the guide-size basis.",
+                }),
+                "max_size": ("FLOAT", {
+                    "default": 1024,
+                    "min": 64,
+                    "max": max_resolution,
+                    "step": 8,
+                    "tooltip": "Maximum crop size before sampling.",
+                }),
+                "seed": ("INT", {
+                    "default": 0,
+                    "min": 0,
+                    "max": 0xffffffffffffffff,
+                }),
+                "steps": ("INT", {
+                    "default": 20,
+                    "min": 1,
+                    "max": 10000,
+                }),
+                "cfg": ("FLOAT", {
+                    "default": 8.0,
+                    "min": 0.0,
+                    "max": 100.0,
+                }),
+                "sampler_name": (_comfy_sampler_names(),),
+                "scheduler": (_impact_scheduler_names(),),
+                "positive": ("CONDITIONING",),
+                "negative": ("CONDITIONING",),
+                "denoise": ("FLOAT", {
+                    "default": 0.5,
+                    "min": 0.0001,
+                    "max": 1.0,
+                    "step": 0.01,
+                }),
+                "feather": ("INT", {
+                    "default": 5,
+                    "min": 0,
+                    "max": 100,
+                    "step": 1,
+                }),
+                "noise_mask": ("BOOLEAN", {
+                    "default": True,
+                    "label_on": "enabled",
+                    "label_off": "disabled",
+                }),
+                "force_inpaint": ("BOOLEAN", {
+                    "default": True,
+                    "label_on": "enabled",
+                    "label_off": "disabled",
+                }),
+                "wildcard": ("STRING", {
+                    "multiline": True,
+                    "default": "",
+                    "dynamicPrompts": False,
+                }),
+                "cycle": ("INT", {
+                    "default": 1,
+                    "min": 1,
+                    "max": 10,
+                    "step": 1,
+                }),
+                "alignment": (["impact", "none", "8", "16", "32", "64"], {
+                    "default": "impact",
+                    "tooltip": (
+                        "Initial backend delegates to Impact Pack. Use impact/none for pass-through. "
+                        "Numeric alignment is reserved for the native ANIMA backend."
+                    ),
+                }),
+                "preserve_conditioning_metadata": ("BOOLEAN", {
+                    "default": True,
+                    "tooltip": (
+                        "Reserved safety flag for the native ANIMA backend. "
+                        "The current Impact backend passes conditioning through to Impact Pack."
+                    ),
+                }),
+                "fail_on_unsupported_opt": ("BOOLEAN", {
+                    "default": False,
+                    "tooltip": "Raise an error instead of warning when a native-backend-only option is requested.",
+                }),
+            },
+            "optional": {
+                "detailer_hook": ("DETAILER_HOOK",),
+                "inpaint_model": ("BOOLEAN", {
+                    "default": False,
+                    "label_on": "enabled",
+                    "label_off": "disabled",
+                }),
+                "noise_mask_feather": ("INT", {
+                    "default": 20,
+                    "min": 0,
+                    "max": 100,
+                    "step": 1,
+                }),
+                "scheduler_func_opt": ("SCHEDULER_FUNC",),
+                "tiled_encode": ("BOOLEAN", {
+                    "default": False,
+                    "label_on": "enabled",
+                    "label_off": "disabled",
+                }),
+                "tiled_decode": ("BOOLEAN", {
+                    "default": False,
+                    "label_on": "enabled",
+                    "label_off": "disabled",
+                }),
+            },
+        }
+
+    RETURN_TYPES = ("IMAGE",)
+    RETURN_NAMES = ("image",)
+    FUNCTION = "doit"
+    CATEGORY = "EasyUse Anima/Detailer"
+
+    def doit(
+        self,
+        image,
+        segs,
+        model,
+        clip,
+        vae,
+        guide_size,
+        guide_size_for,
+        max_size,
+        seed,
+        steps,
+        cfg,
+        sampler_name,
+        scheduler,
+        positive,
+        negative,
+        denoise,
+        feather,
+        noise_mask,
+        force_inpaint,
+        wildcard,
+        cycle=1,
+        alignment="impact",
+        preserve_conditioning_metadata=True,
+        fail_on_unsupported_opt=False,
+        detailer_hook=None,
+        inpaint_model=False,
+        noise_mask_feather=0,
+        scheduler_func_opt=None,
+        tiled_encode=False,
+        tiled_decode=False,
+    ):
+        alignment_text = str(alignment or "impact")
+        if alignment_text not in ("impact", "none"):
+            message = (
+                "[EasyUseAnima] Numeric alignment is planned for the native ANIMA detailer backend. "
+                "The current core implementation delegates to Impact Pack DetailerForEach, so alignment "
+                f"'{alignment_text}' cannot be applied yet."
+            )
+            if _as_bool(fail_on_unsupported_opt, False):
+                raise RuntimeError(message)
+            logger.warning(message)
+
+        if not _as_bool(preserve_conditioning_metadata, True):
+            logger.warning(
+                "[EasyUseAnima] preserve_conditioning_metadata=false is reserved for a native backend; "
+                "the Impact backend leaves conditioning handling to Impact Pack."
+            )
+
+        detailer_cls = _find_impact_detailer_class()
+        detailer = detailer_cls()
+        result = _call_impact_detailer(
+            detailer,
+            image=image,
+            segs=segs,
+            model=model,
+            clip=clip,
+            vae=vae,
+            guide_size=guide_size,
+            guide_size_for=guide_size_for,
+            max_size=max_size,
+            seed=seed,
+            steps=steps,
+            cfg=cfg,
+            sampler_name=sampler_name,
+            scheduler=scheduler,
+            positive=positive,
+            negative=negative,
+            denoise=denoise,
+            feather=feather,
+            noise_mask=noise_mask,
+            force_inpaint=force_inpaint,
+            wildcard=wildcard,
+            cycle=cycle,
+            detailer_hook=detailer_hook,
+            inpaint_model=inpaint_model,
+            noise_mask_feather=noise_mask_feather,
+            scheduler_func_opt=scheduler_func_opt,
+            tiled_encode=tiled_encode,
+            tiled_decode=tiled_decode,
+        )
+        if isinstance(result, dict):
+            value = result.get("result")
+            if isinstance(value, tuple) and value:
+                return (value[0],)
+        if isinstance(result, tuple):
+            if not result:
+                raise RuntimeError("[EasyUseAnima] Impact DetailerForEach returned an empty tuple.")
+            return (result[0],)
+        return (result,)
 
 
 class EasyUseAnimaNAIARandomPrompt:
