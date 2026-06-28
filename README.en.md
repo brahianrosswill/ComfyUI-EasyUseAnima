@@ -278,6 +278,40 @@ Trigger words:
 - Trigger words are deduplicated and output as a comma-separated string for
   Prompt Studio trigger fields.
 
+### Anima Detailer Align Hook
+
+Category: `EasyUse Anima/Detailer`
+
+Output:
+
+- `detailer_hook`
+
+Creates an Impact Pack compatible `DETAILER_HOOK` that aligns the crop sampling
+size used by Impact detailers. Connect it to `detailer_hook` on Impact
+`DetailerForEach`, Impact SEGS detailers, or `Anima Detailer`.
+
+Main behavior:
+
+- `alignment=32` rounds crop sampling width and height upward to 32-multiples.
+  This is intended for ANIMA/Spectrum workflows where 16-channel or special VAE
+  paths can fail on non-32-multiple crop sizes.
+- If another `detailer_hook` is connected, the existing hook runs first and the
+  alignment adjustment is applied afterward.
+- `alignment=none` keeps the original Impact Pack crop size.
+
+### Anima Detailer / SAM3 Detailer
+
+Category: `EasyUse Anima/Detailer`
+
+These nodes are convenience wrappers for Impact Pack detailer workflows.
+`Anima Detailer` delegates to Impact Pack `DetailerForEach`. `Anima SAM3
+Detailer` connects ComfyUI native SAM3 detection, Impact `MaskToSEGS`, and the
+delegated detailer path.
+
+These nodes require ComfyUI-Impact-Pack at runtime. The dependency is checked
+when the node runs so the rest of EasyUse Anima can still import without Impact
+Pack installed.
+
 ## Shared Front-End Features
 
 Autocomplete:
@@ -312,6 +346,10 @@ ComfyUI Settings:
 ## Requirements
 
 NAIA must expose the ComfyUI remote API used by `comfyui-naia-bridge`.
+
+Detailer nodes require `ComfyUI-Impact-Pack` at runtime. This is a ComfyUI
+custom-node dependency, not a Python package dependency, so it is not listed in
+`pyproject.toml` Python dependencies.
 
 Install Python dependency:
 

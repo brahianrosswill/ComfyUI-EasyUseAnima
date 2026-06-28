@@ -278,6 +278,39 @@ Trigger words:
 - trigger word는 중복 제거 후 쉼표로 구분된 문자열로 출력되어 Prompt Studio
   trigger field에 연결할 수 있습니다.
 
+### Anima Detailer Align Hook
+
+카테고리: `EasyUse Anima/Detailer`
+
+출력:
+
+- `detailer_hook`
+
+Impact Pack과 호환되는 `DETAILER_HOOK`을 만들어 Impact detailer의 crop
+sampling 크기를 정렬합니다. Impact `DetailerForEach`, Impact SEGS detailer,
+또는 `Anima Detailer`의 `detailer_hook` 입력에 연결합니다.
+
+주요 동작:
+
+- `alignment=32`는 crop sampling width/height를 32배수로 올림 보정합니다.
+  ANIMA/Spectrum 워크플로우에서 16채널 VAE나 특수 VAE 경로가 32배수가 아닌
+  crop 크기에서 실패하는 문제를 줄이기 위한 옵션입니다.
+- 기존 `detailer_hook`을 연결하면 기존 hook 동작을 먼저 실행한 뒤 크기
+  정렬을 적용합니다.
+- `alignment=none`은 Impact Pack 원본 crop 크기를 유지합니다.
+
+### Anima Detailer / SAM3 Detailer
+
+카테고리: `EasyUse Anima/Detailer`
+
+Impact Pack detailer workflow를 편하게 쓰기 위한 노드입니다. `Anima Detailer`는
+Impact Pack `DetailerForEach`에 위임합니다. `Anima SAM3 Detailer`는 ComfyUI
+native SAM3 detection, Impact `MaskToSEGS`, 위임된 detailer 경로를 연결합니다.
+
+이 노드들은 실행 시점에 `ComfyUI-Impact-Pack`이 필요합니다. 의존성은 노드 실행
+시점에 확인하므로 Impact Pack이 없어도 EasyUse Anima의 다른 노드 import는
+실패하지 않습니다.
+
 ## 공통 프론트엔드 기능
 
 자동완성:
@@ -310,6 +343,10 @@ ComfyUI Settings:
 ## 요구 사항
 
 NAIA는 `comfyui-naia-bridge`가 사용하는 ComfyUI remote API를 노출해야 합니다.
+
+Detailer 계열 노드는 실행 시점에 `ComfyUI-Impact-Pack`이 필요합니다. 이것은
+Python package dependency가 아니라 ComfyUI custom node dependency이므로
+`pyproject.toml`의 Python dependencies에는 넣지 않습니다.
 
 Python dependency 설치:
 

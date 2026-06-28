@@ -207,6 +207,26 @@
       }
     }
   },
+  "EasyUseAnimaDetailerAlignHook": {
+    "display_name": "Anima 디테일러 정렬 Hook",
+    "description": "Impact Pack 디테일러의 detailer_hook 입력에 연결하는 크기 정렬 Hook입니다. Impact Pack의 touch_scaled_size 확장 지점을 사용해 crop sampling 크기를 지정 배수로 올림 보정합니다.",
+    "inputs": {
+      "alignment": {
+        "name": "정렬 배수",
+        "tooltip": "crop sampling 크기를 이 배수로 올림 보정합니다. ANIMA/Spectrum 워크플로우에서는 32를 권장하며, none은 Impact Pack 원본 크기를 유지합니다."
+      },
+      "detailer_hook": {
+        "name": "기존 디테일러 Hook",
+        "tooltip": "선택 입력입니다. 기존 Impact Pack detailer_hook을 연결하면 기존 hook 동작을 먼저 실행한 뒤 크기 정렬을 적용합니다."
+      }
+    },
+    "outputs": {
+      "0": {
+        "name": "디테일러 Hook",
+        "tooltip": "Impact Pack DetailerForEach 또는 Anima Detailer의 detailer_hook 입력에 연결할 DETAILER_HOOK입니다."
+      }
+    }
+  },
   "EasyUseAnimaDetailer": {
     "display_name": "Anima 디테일러",
     "description": "Impact Pack의 SEGS 디테일러와 호환되는 ANIMA용 디테일러 진입점입니다. 초기 백엔드는 Impact Pack DetailerForEach에 위임하며, Impact Pack이 없어도 EasyUse Anima의 다른 노드 import는 실패하지 않습니다.",

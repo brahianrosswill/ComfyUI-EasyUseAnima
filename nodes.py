@@ -539,9 +539,9 @@ def _align_up(value: int, alignment: int) -> int:
 
 
 class _EasyUseAnimaAlignedDetailerHook:
-    def __init__(self, base_hook, alignment: int):
+    def __init__(self, base_hook, alignment: Optional[int]):
         self.base_hook = base_hook
-        self.alignment = int(alignment)
+        self.alignment = int(alignment) if alignment is not None else None
 
     def __getattr__(self, name):
         if self.base_hook is not None:
@@ -551,6 +551,8 @@ class _EasyUseAnimaAlignedDetailerHook:
     def touch_scaled_size(self, width, height):
         if self.base_hook is not None and hasattr(self.base_hook, "touch_scaled_size"):
             width, height = self.base_hook.touch_scaled_size(width, height)
+        if self.alignment is None:
+            return width, height
         aligned_width = _align_up(width, self.alignment)
         aligned_height = _align_up(height, self.alignment)
         if aligned_width != width or aligned_height != height:
@@ -2389,6 +2391,47 @@ class EasyUseAnimaSAM3Context:
     def load(self, ckpt_name):
         model, clip, vae = _load_checkpoint_with_comfy(str(ckpt_name))
         return (_sam3_context(model, clip, vae, str(ckpt_name)), model, clip, vae)
+
+
+class EasyUseAnimaDetailerAlignHook:
+    """Impact Pack DETAILER_HOOK that aligns detail crop sampling sizes upward."""
+
+    DESCRIPTION = (
+        "Creates an Impact Pack compatible DETAILER_HOOK that aligns the detailer crop sampling "
+        "size upward to a selected multiple. Use alignment 32 for ANIMA/Spectrum workflows that "
+        "require 32-multiple latent-safe crop sizes."
+    )
+    OUTPUT_TOOLTIPS = (
+        "Impact Pack compatible DETAILER_HOOK. Connect it to an Impact DetailerForEach or Anima Detailer detailer_hook input.",
+    )
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "alignment": (["none", "8", "16", "32", "64"], {
+                    "default": "32",
+                    "tooltip": (
+                        "Crop sampling size alignment. 32 is recommended for ANIMA/Spectrum safety; "
+                        "none keeps the original Impact Pack size."
+                    ),
+                }),
+            },
+            "optional": {
+                "detailer_hook": ("DETAILER_HOOK", {
+                    "tooltip": "Optional existing Impact Pack detailer hook. It runs before the alignment adjustment.",
+                }),
+            },
+        }
+
+    RETURN_TYPES = ("DETAILER_HOOK",)
+    RETURN_NAMES = ("detailer_hook",)
+    FUNCTION = "build"
+    CATEGORY = "EasyUse Anima/Detailer"
+
+    def build(self, alignment="32", detailer_hook=None):
+        alignment_int = _alignment_value(alignment)
+        return (_EasyUseAnimaAlignedDetailerHook(detailer_hook, alignment_int),)
 
 
 class EasyUseAnimaDetailer:
