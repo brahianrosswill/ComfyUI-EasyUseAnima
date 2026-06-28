@@ -109,6 +109,9 @@ const SETTINGS_TEXT = {
     settingsAutocompleteCsvTooltip: "Select which bundled Korean Danbooru CSV powers autocomplete and tag highlighting.",
     settingsPromptStudioName: "Prompt Studio Highlighting",
     settingsPromptStudioTooltip: "Configure Prompt Studio typo indicators and tag highlight colors.",
+    autocompleteLimitName: "Autocomplete suggestions",
+    autocompleteLimitTooltip: "Maximum number of autocomplete suggestions to show.",
+    colorSettingName: "Highlight color",
     settingsLoraSectionName: "LoraPreset",
     settingsLoraDisplayName: "LoRA display",
     settingsLoraDisplayTooltip: "Choose whether LoRA preset rows show only filenames or full relative paths.",
@@ -182,6 +185,9 @@ const SETTINGS_TEXT = {
     settingsAutocompleteCsvTooltip: "자동완성과 태그 하이라이트에 사용할 한국어 Danbooru CSV를 선택합니다.",
     settingsPromptStudioName: "Prompt Studio 하이라이트",
     settingsPromptStudioTooltip: "Prompt Studio 오타 표시와 태그 하이라이트 색상을 설정합니다.",
+    autocompleteLimitName: "자동완성 추천 수",
+    autocompleteLimitTooltip: "자동완성 창에 표시할 추천 항목 수입니다.",
+    colorSettingName: "하이라이트 색상",
     settingsLoraSectionName: "LoraPreset",
     settingsLoraDisplayName: "LoRA 표시",
     settingsLoraDisplayTooltip: "LoRA 프리셋 행에 파일명만 표시할지 상대 경로를 표시할지 선택합니다.",
@@ -998,47 +1004,316 @@ async function refreshAutocompletePanels() {
   await Promise.all([...autocompletePanels].map((panel) => refreshAutocompletePanel(panel)));
 }
 
+function singleControlContainer(control, status = null) {
+  const container = document.createElement("div");
+  container.style.cssText = SETTINGS_ROW_STYLE;
+  control.style.maxWidth ||= "min(100%, 420px)";
+  container.append(control);
+  if (status) {
+    container.append(status);
+  }
+  return container;
+}
+
+function textSettingEditor(key, value = "", options = {}) {
+  const input = document.createElement("input");
+  input.type = options.type || "text";
+  input.value = String(value ?? "");
+  input.style.cssText = `${SETTINGS_INPUT_STYLE} max-width: ${options.maxWidth || "420px"};`;
+  if (options.min !== undefined) input.min = String(options.min);
+  if (options.max !== undefined) input.max = String(options.max);
+  if (options.step !== undefined) input.step = String(options.step);
+  const status = document.createElement("span");
+  status.style.cssText = SETTINGS_STATUS_STYLE;
+
+  const normalize = () => {
+    if (options.type !== "number") {
+      return input.value;
+    }
+    const fallback = Number.parseInt(String(options.fallback ?? input.value || 0), 10) || 0;
+    const min = options.min === undefined ? Number.NEGATIVE_INFINITY : Number(options.min);
+    const max = options.max === undefined ? Number.POSITIVE_INFINITY : Number(options.max);
+    const valueNumber = Number.parseInt(input.value || String(fallback), 10) || fallback;
+    const clamped = Math.max(min, Math.min(max, valueNumber));
+    input.value = String(clamped);
+    return input.value;
+  };
+
+  input.addEventListener("input", () => {
+    const nextValue = options.type === "number" ? normalize() : input.value;
+    scheduleSettingSave(key, nextValue, status);
+  });
+  input.addEventListener("change", () => {
+    saveSettingAndNotify(key, normalize(), status).catch(() => {});
+  });
+  return singleControlContainer(input, status);
+}
+
+function textareaSettingEditor(key, value = "") {
+  const textarea = document.createElement("textarea");
+  textarea.value = value || "";
+  textarea.placeholder = "best quality\nlowres\nhigh detail";
+  textarea.rows = 4;
+  textarea.style.cssText =
+    "box-sizing: border-box; width: 100%; max-width: min(100%, 520px); min-height: 86px; resize: vertical;";
+  const status = document.createElement("span");
+  status.style.cssText = SETTINGS_STATUS_STYLE;
+  textarea.addEventListener("input", () => {
+    scheduleSettingSave(key, textarea.value, status);
+  });
+  textarea.addEventListener("change", () => {
+    saveSettingAndNotify(key, textarea.value, status).catch(() => {});
+  });
+  return singleControlContainer(textarea, status);
+}
+
+function checkboxSettingEditor(key, checked = false) {
+  const checkbox = document.createElement("input");
+  checkbox.type = "checkbox";
+  checkbox.checked = checked;
+  const status = document.createElement("span");
+  status.style.cssText = SETTINGS_STATUS_STYLE;
+  checkbox.addEventListener("change", () => {
+    saveSettingAndNotify(key, checkbox.checked ? "true" : "false", status).catch(() => {});
+  });
+  return singleControlContainer(checkbox, status);
+}
+
+function selectSettingEditor(key, value, options) {
+  const select = document.createElement("select");
+  select.style.cssText = `${SETTINGS_INPUT_STYLE} max-width: min(100%, 340px);`;
+  for (const [optionValue, optionLabel] of options) {
+    const option = document.createElement("option");
+    option.value = optionValue;
+    option.textContent = optionLabel;
+    option.selected = optionValue === value;
+    select.append(option);
+  }
+  const status = document.createElement("span");
+  status.style.cssText = SETTINGS_STATUS_STYLE;
+  select.addEventListener("change", () => {
+    saveSettingAndNotify(key, select.value, status).catch(() => {});
+  });
+  return singleControlContainer(select, status);
+}
+
+function autocompleteSourceSettingEditor(settings = {}) {
+  settings = currentSettings(settings);
+  const select = document.createElement("select");
+  select.style.cssText = `${SETTINGS_INPUT_STYLE} max-width: min(100%, 420px);`;
+  const status = document.createElement("span");
+  status.style.cssText = SETTINGS_STATUS_STYLE;
+
+  const renderOptions = (data = {}) => {
+    const selected = data.source || settings["autocomplete.source"] || "";
+    const sources = Array.isArray(data.sources) ? data.sources : [];
+    select.replaceChildren();
+    for (const source of sources) {
+      const option = document.createElement("option");
+      option.value = source.key;
+      option.textContent = source.exists ? source.label : `${source.label} (${textFor(settings, "missing")})`;
+      option.selected = source.key === selected;
+      select.append(option);
+    }
+  };
+
+  getAutocompleteStatus()
+    .then((data) => {
+      renderOptions(data);
+      setStatus(status, data.exists ? textFor(settings, "autocompleteReady") : textFor(settings, "autocompleteMissing"));
+    })
+    .catch((error) => {
+      setStatus(status, `${textFor(settings, "autocompleteStatusFailed")}: ${error.message || error}`, "#dc2626");
+    });
+
+  select.addEventListener("change", () => {
+    saveSettingAndNotify("autocomplete.source", select.value, status)
+      .then(refreshAutocompletePanels)
+      .catch(() => {});
+  });
+  return singleControlContainer(select, status);
+}
+
+function colorSettingEditor(colorKey, settings = {}) {
+  settings = currentSettings(settings);
+  const colors = parseColorSettings(settings["prompt_studio.colors"]);
+  const input = document.createElement("input");
+  input.type = "color";
+  input.value = colors[colorKey] || PROMPT_STUDIO_COLOR_DEFAULTS[colorKey]?.color || "#ffffff";
+  input.style.cssText = "width: 42px; height: 28px; padding: 0;";
+  const status = document.createElement("span");
+  status.style.cssText = SETTINGS_STATUS_STYLE;
+
+  const saveColor = () => {
+    const nextColors = parseColorSettings(window.__easyuseAnimaSettings?.["prompt_studio.colors"] || settings["prompt_studio.colors"]);
+    nextColors[colorKey] = input.value;
+    scheduleSettingSave("prompt_studio.colors", JSON.stringify(nextColors), status, 160);
+  };
+  input.addEventListener("input", saveColor);
+  input.addEventListener("change", saveColor);
+  return singleControlContainer(input, status);
+}
+
 app.registerExtension({
   name: "easyuse-anima.settings",
   async setup() {
     const settings = await getSettings();
     window.__easyuseAnimaSettings = { ...settings };
     const latestSettings = () => currentSettings(settings);
-    const sectionSetting = (idSuffix, categoryKey, nameKey, tooltipKey, editor) => ({
-      id: `EasyUseAnima.${idSuffix}.Panel`,
+    const addSetting = ({ id, categoryKey, name, tooltip = "", editor }) => app.ui.settings.addSetting({
+      id: `EasyUseAnima.${id}`,
       category: ["EasyUse Anima", textFor(latestSettings(), categoryKey)],
-      name: textFor(latestSettings(), nameKey),
-      tooltip: textFor(latestSettings(), tooltipKey),
+      name: typeof name === "function" ? name(latestSettings()) : textFor(latestSettings(), name),
+      tooltip: typeof tooltip === "function" ? tooltip(latestSettings()) : tooltip ? textFor(latestSettings(), tooltip) : undefined,
       type: () => editor(latestSettings()),
     });
 
-    app.ui.settings.addSetting(
-      sectionSetting(
-        "Prompt",
-        "settingsPromptSectionName",
-        "settingsPromptPanelName",
-        "settingsPromptPanelTooltip",
-        promptSettingsEditor,
+    addSetting({
+      id: "Prompt.MetadataFilter",
+      categoryKey: "settingsPromptSectionName",
+      name: "settingsPromptMetadataName",
+      tooltip: "settingsPromptMetadataTooltip",
+      editor: (settings) => textareaSettingEditor("prompt.metadata_filter_words", settings["prompt.metadata_filter_words"] || ""),
+    });
+    addSetting({
+      id: "Prompt.AutocompleteMode",
+      categoryKey: "settingsPromptSectionName",
+      name: "autocompleteMode",
+      tooltip: "autocompleteModeGuide",
+      editor: (settings) => selectSettingEditor(
+        "autocomplete.mode",
+        settings["autocomplete.mode"] || "compatible_global",
+        [
+          ["off", textFor(settings, "autocompleteModeOff")],
+          ["easyuse_nodes", textFor(settings, "autocompleteModeEasyUse")],
+          ["compatible_global", textFor(settings, "autocompleteModeCompatible")],
+        ],
       ),
-    );
-    app.ui.settings.addSetting(
-      sectionSetting(
-        "LoraPreset",
-        "settingsLoraSectionName",
-        "settingsLoraDisplayName",
-        "settingsLoraDisplayTooltip",
-        loraPresetEditor,
+    });
+    addSetting({
+      id: "Prompt.AutocompleteSource",
+      categoryKey: "settingsPromptSectionName",
+      name: "settingsAutocompleteCsvName",
+      tooltip: "settingsAutocompleteCsvTooltip",
+      editor: autocompleteSourceSettingEditor,
+    });
+    addSetting({
+      id: "Prompt.AutocompleteLimit",
+      categoryKey: "settingsPromptSectionName",
+      name: "autocompleteLimitName",
+      tooltip: "autocompleteLimitTooltip",
+      editor: (settings) => textSettingEditor("autocomplete.limit", settings["autocomplete.limit"] || 20, {
+        type: "number",
+        min: 1,
+        max: 100,
+        step: 1,
+        fallback: 20,
+        maxWidth: "120px",
+      }),
+    });
+    addSetting({
+      id: "Prompt.TypoIndicator",
+      categoryKey: "settingsPromptSectionName",
+      name: "typoIndicators",
+      tooltip: "settingsPromptStudioTooltip",
+      editor: (settings) => checkboxSettingEditor("prompt_studio.typo_indicator", settings["prompt_studio.typo_indicator"] !== "false"),
+    });
+    addSetting({
+      id: "Prompt.NaiaGeneralAutoToggle",
+      categoryKey: "settingsPromptSectionName",
+      name: "naiaGeneralAutoToggle",
+      tooltip: "promptStudioGuide",
+      editor: (settings) => checkboxSettingEditor(
+        "prompt_studio.naia_general_above_auto_toggle",
+        settings["prompt_studio.naia_general_above_auto_toggle"] === "true",
       ),
-    );
-    app.ui.settings.addSetting(
-      sectionSetting(
-        "NAIA",
-        "settingsNaiaSectionName",
-        "settingsNaiaName",
-        "settingsNaiaTooltip",
-        naiaSettingsEditor,
+    });
+    for (const [colorKey, item] of Object.entries(PROMPT_STUDIO_COLOR_DEFAULTS)) {
+      addSetting({
+        id: `Prompt.HighlightColor.${colorKey}`,
+        categoryKey: "settingsPromptSectionName",
+        name: (settings) => `${textFor(settings, "colorSettingName")}: ${colorLabel(item, settings)}`,
+        tooltip: "promptStudioGuide",
+        editor: (settings) => colorSettingEditor(colorKey, settings),
+      });
+    }
+
+    addSetting({
+      id: "LoraPreset.NameDisplay",
+      categoryKey: "settingsLoraSectionName",
+      name: "settingsLoraDisplayName",
+      tooltip: "settingsLoraDisplayTooltip",
+      editor: (settings) => selectSettingEditor(
+        "lora_preset.name_display",
+        settings["lora_preset.name_display"] || "name",
+        [
+          ["name", textFor(settings, "nameOnly")],
+          ["path", textFor(settings, "fullPath")],
+        ],
       ),
-    );
+    });
+
+    addSetting({
+      id: "NAIA.Host",
+      categoryKey: "settingsNaiaSectionName",
+      name: (settings) => `${textFor(settings, "naiaEndpoint")}: Host`,
+      tooltip: "naiaSettingsGuide",
+      editor: (settings) => textSettingEditor("naia.host", settings["naia.host"] || "127.0.0.1"),
+    });
+    addSetting({
+      id: "NAIA.Port",
+      categoryKey: "settingsNaiaSectionName",
+      name: (settings) => `${textFor(settings, "naiaEndpoint")}: Port`,
+      tooltip: "naiaSettingsGuide",
+      editor: (settings) => textSettingEditor("naia.port", settings["naia.port"] || 7243, {
+        type: "number",
+        min: 1,
+        max: 65535,
+        step: 1,
+        fallback: 7243,
+        maxWidth: "140px",
+      }),
+    });
+    addSetting({
+      id: "NAIA.UseDesktopPromptEngineering",
+      categoryKey: "settingsNaiaSectionName",
+      name: (settings) => `${textFor(settings, "naiaPromptEngineering")}: ${textFor(settings, "useDesktopNaia")}`,
+      tooltip: "naiaSettingsGuide",
+      editor: (settings) => checkboxSettingEditor("naia.use_naia_settings", settings["naia.use_naia_settings"] !== "false"),
+    });
+    for (const [key, labelKey] of [
+      ["pre_prompt", "prePrompt"],
+      ["post_prompt", "postPrompt"],
+      ["auto_hide", "autoHide"],
+    ]) {
+      addSetting({
+        id: `NAIA.${key}`,
+        categoryKey: "settingsNaiaSectionName",
+        name: (settings) => `${textFor(settings, "naiaPromptEngineering")}: ${textFor(settings, labelKey)}`,
+        tooltip: "naiaSettingsGuide",
+        editor: (settings) => textSettingEditor(`naia.${key}`, settings[`naia.${key}`] || ""),
+      });
+    }
+    for (const [key, labelText] of NAIA_PREPROCESSING_OPTIONS) {
+      addSetting({
+        id: `NAIA.${key}`,
+        categoryKey: "settingsNaiaSectionName",
+        name: (settings) => {
+          const label = labelText?.[settingsLanguage(settings)] || labelText?.en || key;
+          return `${textFor(settings, "preprocessingOptions")}: ${label}`;
+        },
+        tooltip: "naiaSettingsGuide",
+        editor: (settings) => selectSettingEditor(
+          `naia.${key}`,
+          settings[`naia.${key}`] || "skip",
+          [
+            ["skip", "skip"],
+            ["on", "on"],
+            ["off", "off"],
+          ],
+        ),
+      });
+    }
 
   },
 });
