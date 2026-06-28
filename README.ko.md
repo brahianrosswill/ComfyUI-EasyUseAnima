@@ -331,6 +331,9 @@ Impact Pack `DetailerForEach`를 연결합니다.
 - `KR_danbooru_tags_with_description v3_modified.csv`: 제작자 허가를 받아 포함
 - `danbooru_tags_classified.csv`: `Localsmile/danbooru_KR_wiki_tag_search` 기반
 
+자세한 CSV 선택 기준, 검색 방식, 개발자용 CSV 포맷은
+[자동완성 CSV 가이드](docs/autocomplete-csv.ko.md)를 참고하세요.
+
 ComfyUI Settings:
 
 - NAIA 요청 host, port, Prompt Engineering option, preprocessing option은

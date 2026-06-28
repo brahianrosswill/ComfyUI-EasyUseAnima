@@ -850,6 +850,10 @@ window.addEventListener("easyuse-anima-settings-updated", (event) => {
     maxResults = clampMaxResults(detail["autocomplete.limit"]);
     cache.clear();
   }
+  if ("autocomplete.source" in detail) {
+    cache.clear();
+    hidePopup();
+  }
   scheduleActiveRefresh();
 });
 

@@ -333,6 +333,9 @@ Bundled autocomplete CSV sources:
 - `danbooru_tags_classified.csv`: from
   `Localsmile/danbooru_KR_wiki_tag_search`.
 
+For source selection, search behavior, and developer CSV format details, see the
+[Autocomplete CSV Guide](docs/autocomplete-csv.en.md).
+
 ComfyUI Settings:
 
 - NAIA request host, port, Prompt Engineering options, and preprocessing options
