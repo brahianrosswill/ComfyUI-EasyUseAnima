@@ -356,7 +356,7 @@ def _find_impact_detailer_class():
             return cls
 
     raise RuntimeError(
-        "[EasyUseAnima] Anima Detailer requires ComfyUI Impact Pack's DetailerForEach. "
+        "[EasyUseAnima] SAM3 Detailer requires ComfyUI Impact Pack's DetailerForEach. "
         "Install/enable ComfyUI-Impact-Pack, then restart ComfyUI."
     )
 
@@ -557,7 +557,7 @@ class _EasyUseAnimaAlignedDetailerHook:
         aligned_height = _align_up(height, self.alignment)
         if aligned_width != width or aligned_height != height:
             logger.info(
-                "[EasyUseAnima] Anima Detailer aligned crop size %sx%s -> %sx%s (alignment=%s)",
+                "[EasyUseAnima] Detailer hook aligned crop size %sx%s -> %sx%s (alignment=%s)",
                 width,
                 height,
                 aligned_width,
@@ -2402,7 +2402,7 @@ class EasyUseAnimaDetailerAlignHook:
         "require 32-multiple latent-safe crop sizes."
     )
     OUTPUT_TOOLTIPS = (
-        "Impact Pack compatible DETAILER_HOOK. Connect it to an Impact DetailerForEach or Anima Detailer detailer_hook input.",
+        "Impact Pack compatible DETAILER_HOOK. Connect it to an Impact DetailerForEach-compatible detailer_hook input.",
     )
 
     @classmethod
@@ -2434,13 +2434,11 @@ class EasyUseAnimaDetailerAlignHook:
         return (_EasyUseAnimaAlignedDetailerHook(detailer_hook, alignment_int),)
 
 
-class EasyUseAnimaDetailer:
-    """Impact-compatible ANIMA detailer entry point."""
+class _EasyUseAnimaImpactDetailerDelegate:
+    """Internal Impact Pack DetailerForEach delegate used by SAM3 nodes."""
 
     DESCRIPTION = (
-        "Runs an Impact Pack compatible SEGS detailer from EasyUse Anima. "
-        "This initial backend delegates to Impact Pack DetailerForEach while keeping "
-        "EasyUse Anima import safe when Impact Pack is unavailable."
+        "Internal Impact Pack DetailerForEach delegate used by EasyUse Anima SAM3 nodes."
     )
     OUTPUT_TOOLTIPS = (
         "Enhanced image returned by Impact Pack DetailerForEach.",
@@ -2675,7 +2673,7 @@ class EasyUseAnimaSAM3Detailer:
 
     DESCRIPTION = (
         "Runs native ComfyUI SAM3 text detection, converts the resulting mask to Impact Pack SEGS, "
-        "then delegates detailing to Anima Detailer / Impact Pack DetailerForEach."
+        "then delegates detailing to Impact Pack DetailerForEach."
     )
     OUTPUT_TOOLTIPS = (
         "Detailed image. If disabled or no SEGS are detected, this is the original image.",
@@ -2687,7 +2685,7 @@ class EasyUseAnimaSAM3Detailer:
     @classmethod
     def INPUT_TYPES(cls):
         max_resolution = _comfy_max_resolution()
-        detailer_inputs = EasyUseAnimaDetailer.INPUT_TYPES()
+        detailer_inputs = _EasyUseAnimaImpactDetailerDelegate.INPUT_TYPES()
         required = {
             "enabled": ("BOOLEAN", {
                 "default": True,
@@ -2873,7 +2871,7 @@ class EasyUseAnimaSAM3Detailer:
             logger.info("[EasyUseAnima] SAM3 Detailer detected no SEGS for prompt %r.", sam3_text)
             return (image, segs, mask, image)
 
-        detailed_image = EasyUseAnimaDetailer().doit(
+        detailed_image = _EasyUseAnimaImpactDetailerDelegate().doit(
             image=image,
             segs=segs,
             model=model,

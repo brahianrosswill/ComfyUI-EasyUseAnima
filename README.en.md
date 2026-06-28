@@ -288,7 +288,7 @@ Output:
 
 Creates an Impact Pack compatible `DETAILER_HOOK` that aligns the crop sampling
 size used by Impact detailers. Connect it to `detailer_hook` on Impact
-`DetailerForEach`, Impact SEGS detailers, or `Anima Detailer`.
+`DetailerForEach` or other Impact-compatible SEGS detailers.
 
 Main behavior:
 
@@ -299,16 +299,15 @@ Main behavior:
   alignment adjustment is applied afterward.
 - `alignment=none` keeps the original Impact Pack crop size.
 
-### Anima Detailer / SAM3 Detailer
+### Anima SAM3 Detailer
 
 Category: `EasyUse Anima/Detailer`
 
-These nodes are convenience wrappers for Impact Pack detailer workflows.
-`Anima Detailer` delegates to Impact Pack `DetailerForEach`. `Anima SAM3
-Detailer` connects ComfyUI native SAM3 detection, Impact `MaskToSEGS`, and the
-delegated detailer path.
+This node is a convenience wrapper for SAM3-based Impact Pack detailer workflows.
+`Anima SAM3 Detailer` connects ComfyUI native SAM3 detection, Impact
+`MaskToSEGS`, and Impact Pack `DetailerForEach`.
 
-These nodes require ComfyUI-Impact-Pack at runtime. The dependency is checked
+This node requires ComfyUI-Impact-Pack at runtime. The dependency is checked
 when the node runs so the rest of EasyUse Anima can still import without Impact
 Pack installed.
 
@@ -347,7 +346,7 @@ ComfyUI Settings:
 
 NAIA must expose the ComfyUI remote API used by `comfyui-naia-bridge`.
 
-Detailer nodes require `ComfyUI-Impact-Pack` at runtime. This is a ComfyUI
+SAM3 detailer nodes require `ComfyUI-Impact-Pack` at runtime. This is a ComfyUI
 custom-node dependency, not a Python package dependency, so it is not listed in
 `pyproject.toml` Python dependencies.
 
